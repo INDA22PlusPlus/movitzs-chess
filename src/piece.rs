@@ -23,7 +23,6 @@ pub struct Piece(u8);
 
 const PIECE_MASK: u8 = 0b00000111;
 const COLOR_MASK: u8 = 0b00001000;
-const HAS_MOVED_MASK: u8 = 0b00010000; // TODO remove? casteling avaliability is in board now
 // soo much real-estate here...
 
 impl Piece {
@@ -55,13 +54,6 @@ impl Piece {
         PieceColor::White
     }
 
-    pub fn taint_move(&mut self) {
-        self.0 ^= HAS_MOVED_MASK;
-    }
-
-    pub fn has_moved(&self) -> bool {
-        self.0 & HAS_MOVED_MASK != 0
-    }
 }
 
 impl fmt::Debug for Piece {
@@ -69,7 +61,6 @@ impl fmt::Debug for Piece {
         f.debug_struct("Piece")
          .field("type", &self.get_type())
          .field("color", &self.get_color())
-         .field("has_moved", &self.has_moved())
          .finish()
     }
 }
