@@ -32,7 +32,7 @@ fn square_str_to_idx(square: &[char]) -> u8 {
     let rank = square[1].to_digit(10).expect("square rank not digit") as u8;
     assert!(rank - 1 < 8, "square rank not 1-8");
 
-    rank * (RANK_SIZE as u8) + file
+    (rank-1) * (RANK_SIZE as u8) + file
 }
 
 impl Board {
@@ -136,13 +136,68 @@ impl Board {
         })
     }
 
-    fn get_piece_at() -> Piece {
-        Piece::new(PieceType::Rook, PieceColor::White) //todo impl
+    fn get_piece_at(&self, sqr: &[char]) -> Option<&Piece> {
+        self.pieces[square_str_to_idx(sqr) as usize].as_ref()
     }
 }
 
 #[cfg(test)]
-mod tests {
+mod lib_tests {
+    use crate::piece::{PieceColor, PieceType};
+
+    use super::Board;
+
+    #[test]
+    fn fen_test() {
+        // standard initial setup
+        let b =
+            Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
+
+        // todo: implement generic chessboard comparison
+        for file in 'a'..='h' {
+            for rank in 1..=2 {
+                let p = b
+                    .get_piece_at(&[file, char::from_digit(rank, 10).unwrap()])
+                    .unwrap();
+
+                assert!(
+                    p.get_color() == PieceColor::White,
+                    "piece color not correct"
+                );
+
+                if rank == 2 {
+                    assert!(
+                        p.get_type() == PieceType::Pawn,
+                        "2th rank must be all pawns"
+                    );
+                }
+            }
+        }
+
+        for file in 'a'..='h' {
+            for rank in 7..=8 {
+                let p = b
+                    .get_piece_at(&[file, char::from_digit(rank, 10).unwrap()])
+                    .unwrap();
+
+                assert!(
+                    p.get_color() == PieceColor::Black,
+                    "piece color must be black"
+                );
+
+                if rank == 7 {
+                    assert!(
+                        p.get_type() == PieceType::Pawn,
+                        "7th rank must be all pawns"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod internal_tests {
     use super::Board;
 
     #[test]

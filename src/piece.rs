@@ -2,7 +2,7 @@ use std::fmt;
 
 
 #[repr(u8)]
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum PieceType {
     Pawn = 0,
     Rook,
