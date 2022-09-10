@@ -10,6 +10,7 @@ const WHITE_QUEEN_CASTLE_MASK: u8 = 0b00001000;
 const WHITE_KING_CASTLE_MASK: u8 = 0b00010000;
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct Board {
     active_color_and_castle_avaliability: u8, // hot path
 
@@ -35,6 +36,14 @@ fn square_str_to_idx(square: &[char]) -> u8 {
     (rank - 1) * (RANK_SIZE as u8) + file
 }
 
+fn idx_to_square_str(idx: u8) -> [char; 2] {
+    let file = ('a' as u8 + idx % 8) as char;
+    let rank = char::from_digit((idx / 8) as u32 + 1, 10).unwrap();
+
+    [file, rank]
+}
+
+#[allow(dead_code)]
 impl Board {
     pub fn from_fen(fen: &str) -> Result<Self, &'static str> {
         // Reference: https://en.wikipedia.org/wiki/Forsyth%E2%80%93Edwards_Notation
@@ -65,7 +74,7 @@ impl Board {
                     true => PieceColor::Black,
                     false => PieceColor::White,
                 };
-                let piece_type = match c.to_lowercase().nth(0).unwrap() {
+                let piece_type = match c.to_ascii_lowercase() {
                     'p' => PieceType::Pawn,
                     'r' => PieceType::Rook,
                     'n' => PieceType::Knight,
@@ -137,6 +146,103 @@ impl Board {
         })
     }
 
+    fn to_fen(&self) -> String {
+        let mut fen = String::new();
+
+        for rank in (0..=7).rev() {
+            let mut blank_squares: u8 = 0;
+
+            for file in 0..=7 {
+                let idx = rank * 8 + file;
+
+                if self.pieces[idx].is_none() {
+                    blank_squares += 1;
+                    continue;
+                }
+
+                if blank_squares != 0 {
+                    fen.push(char::from_digit(blank_squares as u32, 10).unwrap());
+                    blank_squares = 0;
+                }
+
+                let p = self.pieces[idx].as_ref().unwrap();
+
+                let mut c: char = match p.get_type() {
+                    PieceType::Pawn => 'p',
+                    PieceType::Rook => 'r',
+                    PieceType::Bishop => 'b',
+                    PieceType::Knight => 'n',
+                    PieceType::Queen => 'q',
+                    PieceType::King => 'k',
+                };
+
+                if p.get_color() == PieceColor::White {
+                    c = c.to_ascii_uppercase();
+                }
+
+                fen.push(c);
+            }
+
+            if blank_squares != 0 {
+                fen.push(char::from_digit(blank_squares as u32, 10).unwrap());
+            }
+            if rank != 0 {
+                fen.push('/');
+            }
+        }
+
+        fen.push(' ');
+
+        if self.active_color_and_castle_avaliability & WHITE_TO_MOVE_MASK == 0 {
+            fen.push('b');
+        } else {
+            fen.push('w');
+        }
+
+        fen.push(' ');
+
+        if self.active_color_and_castle_avaliability
+            & (BLACK_KING_CASTLE_MASK
+                | BLACK_QUEEN_CASTLE_MASK
+                | WHITE_KING_CASTLE_MASK
+                | WHITE_QUEEN_CASTLE_MASK)
+            == 0
+        {
+            fen.push('-');
+        } else {
+            if self.active_color_and_castle_avaliability & WHITE_KING_CASTLE_MASK != 0 {
+                fen.push('K');
+            }
+            if self.active_color_and_castle_avaliability & WHITE_QUEEN_CASTLE_MASK != 0 {
+                fen.push('Q');
+            }
+            if self.active_color_and_castle_avaliability & BLACK_KING_CASTLE_MASK != 0 {
+                fen.push('k');
+            }
+            if self.active_color_and_castle_avaliability & BLACK_QUEEN_CASTLE_MASK != 0 {
+                fen.push('q');
+            }
+        }
+
+        fen.push(' ');
+
+        if self.en_passant_square == u8::MAX {
+            fen.push('-');
+        } else {
+            fen += &idx_to_square_str(self.en_passant_square)
+                .iter()
+                .collect::<String>();
+        }
+
+        fen.push(' ');
+
+        fen.push(char::from_digit(self.half_moves as u32, 10).unwrap());
+        fen.push(' ');
+        fen.push(char::from_digit(self.full_moves as u32, 10).unwrap());
+
+        return fen;
+    }
+
     fn get_piece_at(&self, sqr: &[char]) -> Option<&Piece> {
         self.pieces[square_str_to_idx(sqr) as usize].as_ref()
     }
@@ -149,12 +255,32 @@ mod lib_tests {
     use super::Board;
 
     #[test]
+    fn fen_in_out() {
+        let cases = [
+            "rn1qkbnr/pppbp1pp/8/1B1pPp2/8/8/PPPP1PPP/RNBQK1NR w KQkq f6 0 4",
+            "rn1qkbnr/pppbp1pp/8/1B1pPp2/8/8/PPPPKPPP/RNBQ2NR b kq - 1 4",
+            "rn1qkbnr/ppp1p1pp/8/1b1pPp2/8/3P4/PPP1KPPP/RNBQ2NR b kq - 0 5",
+            "rn1qkb1r/ppp1p1pp/5n2/1b1pPp2/8/3P4/PPP1KPPP/RNBQ2NR w kq - 1 6",
+            "rn1qkbr1/ppp1p1pp/5n2/1b1pPp2/8/3P1N2/PPP1KPPP/RNBQ3R w q - 3 7",
+            "rn1qkbr1/ppp1p1p1/5n2/1b1pP1Pp/5p2/3P1N2/PPP1KP1P/RNBQ3R w q h6 0 9"
+        ];
+
+        for case in cases {
+            let out_fen = Board::from_fen(case).unwrap().to_fen();
+            assert!(
+                out_fen == case,
+                "in didn't match out, expected: {case}, got: {out_fen}"
+            );
+        }
+    }
+
+    #[test]
     fn fen_test() {
         // standard initial setup
         // todo: implement generic chessboard comparison
         let b =
             Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
-        
+
         assert!(b.en_passant_square == u8::MAX);
         assert!(b.half_moves == 0);
         assert!(b.full_moves == 1); // todo this is internal
@@ -223,7 +349,7 @@ mod lib_tests {
 
 #[cfg(test)]
 mod internal_tests {
-    use super::{square_str_to_idx, Board};
+    use super::{idx_to_square_str, square_str_to_idx, BOARD_SIZE};
 
     #[test]
     fn to_idx_test() {
@@ -247,5 +373,17 @@ mod internal_tests {
         assert!(square_str_to_idx(&['c', '8']) == 2 + 8 * 7);
 
         assert!(square_str_to_idx(&['h', '8']) == 63);
+    }
+
+    #[test]
+    fn idx_from_to_test() {
+        for idx in 0..BOARD_SIZE {
+            assert!(square_str_to_idx(&idx_to_square_str(idx as u8)) == idx as u8);
+        }
+        for rank in '1'..='8' {
+            for file in 'a'..='h' {
+                assert!(idx_to_square_str(square_str_to_idx(&[file, rank])) == [file, rank]);
+            }
+        }
     }
 }

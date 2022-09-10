@@ -1,7 +1,7 @@
 mod piece;
 mod board;
 
-use crate::{piece::Piece, board::Board};
+use crate::{board::Board};
 
 
 fn main() {
