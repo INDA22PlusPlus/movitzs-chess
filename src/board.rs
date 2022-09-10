@@ -32,31 +32,32 @@ fn square_str_to_idx(square: &[char]) -> u8 {
     let rank = square[1].to_digit(10).expect("square rank not digit") as u8;
     assert!(rank - 1 < 8, "square rank not 1-8");
 
-    (rank-1) * (RANK_SIZE as u8) + file
+    (rank - 1) * (RANK_SIZE as u8) + file
 }
 
 impl Board {
     pub fn from_fen(fen: &str) -> Result<Self, &'static str> {
         // Reference: https://en.wikipedia.org/wiki/Forsyth%E2%80%93Edwards_Notation
+        let fen: Vec<char> = fen.chars().collect();
 
         const INIT: Option<Piece> = None; // https://github.com/rust-lang/rust/issues/44796
         let mut pieces = [INIT; BOARD_SIZE];
 
         let mut i = 0;
-        let fen: Vec<char> = fen.chars().collect();
+        let mut rank = 7;
+        let mut file = 0;
 
-        let mut counter = BOARD_SIZE; // fen starts at rank 8
         while fen[i] != ' ' {
             let c = fen[i];
             i += 1;
 
             if c == '/' {
-                // we don't need to keep track of the ranks IF the fen 100% is correct
-                // a human would understand ".../4p/..." but this parser would not
+                rank -= 1;
+                file = 0;
                 continue;
             }
             if c.is_numeric() {
-                counter -= c.to_digit(10).unwrap() as usize;
+                file += c.to_digit(10).unwrap() as usize;
                 continue;
             }
             if c.is_alphabetic() {
@@ -73,8 +74,8 @@ impl Board {
                     'q' => PieceType::Queen,
                     _ => return Err("unknown piece"),
                 };
-                pieces[counter - 1] = Some(Piece::new(piece_type, color));
-                counter -= 1;
+                pieces[rank * 8 + file] = Some(Piece::new(piece_type, color));
+                file += 1;
                 continue;
             }
 
@@ -150,46 +151,70 @@ mod lib_tests {
     #[test]
     fn fen_test() {
         // standard initial setup
+        // todo: implement generic chessboard comparison
         let b =
             Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
+        
+        assert!(b.en_passant_square == u8::MAX);
+        assert!(b.half_moves == 0);
+        assert!(b.full_moves == 1); // todo this is internal
 
-        // todo: implement generic chessboard comparison
         for file in 'a'..='h' {
-            for rank in 1..=2 {
-                let p = b
-                    .get_piece_at(&[file, char::from_digit(rank, 10).unwrap()])
-                    .unwrap();
-
-                assert!(
-                    p.get_color() == PieceColor::White,
-                    "piece color not correct"
-                );
-
-                if rank == 2 {
-                    assert!(
-                        p.get_type() == PieceType::Pawn,
-                        "2th rank must be all pawns"
-                    );
-                }
+            for rank in '3'..='6' {
+                assert!(b.get_piece_at(&[file, rank]).is_none());
             }
         }
 
         for file in 'a'..='h' {
-            for rank in 7..=8 {
-                let p = b
-                    .get_piece_at(&[file, char::from_digit(rank, 10).unwrap()])
-                    .unwrap();
+            for rank in '1'..='8' {
+                let p = b.get_piece_at(&[file, rank]);
 
-                assert!(
-                    p.get_color() == PieceColor::Black,
-                    "piece color must be black"
-                );
+                if rank > '2' && rank < '7' {
+                    assert!(p.is_none());
+                    continue;
+                }
 
-                if rank == 7 {
+                let p = p.unwrap();
+                if rank <= '2' {
+                    assert!(
+                        p.get_color() == PieceColor::White,
+                        "piece color must be white"
+                    );
+                } else if rank >= '7' {
+                    assert!(
+                        p.get_color() == PieceColor::Black,
+                        "piece color must be black"
+                    );
+                }
+
+                if rank == '7' || rank == '2' {
                     assert!(
                         p.get_type() == PieceType::Pawn,
-                        "7th rank must be all pawns"
+                        "2/7th rank must be all pawns"
                     );
+                }
+
+                if rank == '8' || rank == '1' {
+                    match p.get_type() {
+                        PieceType::Rook => {
+                            assert!(file == 'a' || file == 'h')
+                        }
+                        PieceType::Knight => {
+                            assert!(file == 'b' || file == 'g')
+                        }
+                        PieceType::Bishop => {
+                            assert!(file == 'c' || file == 'f')
+                        }
+                        PieceType::Queen => {
+                            assert!(file == 'd')
+                        }
+                        PieceType::King => {
+                            assert!(file == 'e')
+                        }
+                        _ => {
+                            panic!("unknown piece")
+                        }
+                    }
                 }
             }
         }
@@ -198,12 +223,29 @@ mod lib_tests {
 
 #[cfg(test)]
 mod internal_tests {
-    use super::Board;
+    use super::{square_str_to_idx, Board};
 
     #[test]
-    fn fen_test() {
+    fn to_idx_test() {
         // standard initial setup
-        let b =
-            Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
+        assert!(square_str_to_idx(&['a', '1']) == 0);
+        assert!(square_str_to_idx(&['b', '1']) == 1);
+        assert!(square_str_to_idx(&['c', '1']) == 2);
+        assert!(square_str_to_idx(&['d', '1']) == 3);
+        assert!(square_str_to_idx(&['e', '1']) == 4);
+        assert!(square_str_to_idx(&['f', '1']) == 5);
+        assert!(square_str_to_idx(&['g', '1']) == 6);
+        assert!(square_str_to_idx(&['h', '1']) == 7);
+
+        assert!(square_str_to_idx(&['c', '1']) == 2 + 8 * 0);
+        assert!(square_str_to_idx(&['c', '2']) == 2 + 8 * 1);
+        assert!(square_str_to_idx(&['c', '3']) == 2 + 8 * 2);
+        assert!(square_str_to_idx(&['c', '4']) == 2 + 8 * 3);
+        assert!(square_str_to_idx(&['c', '5']) == 2 + 8 * 4);
+        assert!(square_str_to_idx(&['c', '6']) == 2 + 8 * 5);
+        assert!(square_str_to_idx(&['c', '7']) == 2 + 8 * 6);
+        assert!(square_str_to_idx(&['c', '8']) == 2 + 8 * 7);
+
+        assert!(square_str_to_idx(&['h', '8']) == 63);
     }
 }
