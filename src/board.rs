@@ -286,12 +286,6 @@ mod lib_tests {
         assert!(b.full_moves == 1); // todo this is internal
 
         for file in 'a'..='h' {
-            for rank in '3'..='6' {
-                assert!(b.get_piece_at(&[file, rank]).is_none());
-            }
-        }
-
-        for file in 'a'..='h' {
             for rank in '1'..='8' {
                 let p = b.get_piece_at(&[file, rank]);
 
