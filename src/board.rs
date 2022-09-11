@@ -37,9 +37,9 @@ fn square_str_to_idx(square: &[char]) -> u8 {
 }
 
 fn idx_to_square_str(idx: u8) -> [char; 2] {
+    assert!(idx < BOARD_SIZE as u8, "index cannot be more than the board size");
     let file = ('a' as u8 + idx % 8) as char;
-    let rank = char::from_digit((idx / 8) as u32 + 1, 10).unwrap();
-
+    let rank = ('1' as u8 + idx / 8) as char;
     [file, rank]
 }
 
