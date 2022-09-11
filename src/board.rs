@@ -30,10 +30,10 @@ fn square_str_to_idx(square: &[char]) -> u8 {
     };
     let file: u8 = (square[0] as u8) - 'a' as u8;
 
-    let rank = square[1].to_digit(10).expect("square rank not digit") as u8;
-    assert!(rank - 1 < 8, "square rank not 1-8");
+    let rank: u8 = (square[1] as u8) - '1' as u8;
+    assert!(rank  < 8, "square rank not 1-8");
 
-    (rank - 1) * (RANK_SIZE as u8) + file
+    rank  * (RANK_SIZE as u8) + file
 }
 
 fn idx_to_square_str(idx: u8) -> [char; 2] {
