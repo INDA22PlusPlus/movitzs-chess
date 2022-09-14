@@ -1,3 +1,4 @@
+use crate::cmove::*;
 use crate::piece::*;
 
 const RANK_SIZE: usize = 8;
@@ -8,6 +9,75 @@ const BLACK_QUEEN_CASTLE_MASK: u8 = 0b00000010;
 const BLACK_KING_CASTLE_MASK: u8 = 0b00000100;
 const WHITE_QUEEN_CASTLE_MASK: u8 = 0b00001000;
 const WHITE_KING_CASTLE_MASK: u8 = 0b00010000;
+
+// these were generated with the king_attack function
+// since the kings attack never changes depending on other pieces, we can have it constant instead
+const KING_ATTACK_MASKS: [u64; 64] = [
+    770,
+    1797,
+    3594,
+    7188,
+    14376,
+    28752,
+    57504,
+    49216,
+    197123,
+    460039,
+    920078,
+    1840156,
+    3680312,
+    7360624,
+    14721248,
+    12599488,
+    50463488,
+    117769984,
+    235539968,
+    471079936,
+    942159872,
+    1884319744,
+    3768639488,
+    3225468928,
+    12918652928,
+    30149115904,
+    60298231808,
+    120596463616,
+    241192927232,
+    482385854464,
+    964771708928,
+    825720045568,
+    3307175149568,
+    7718173671424,
+    15436347342848,
+    30872694685696,
+    61745389371392,
+    123490778742784,
+    246981557485568,
+    211384331665408,
+    846636838289408,
+    1975852459884544,
+    3951704919769088,
+    7903409839538176,
+    15806819679076352,
+    31613639358152704,
+    63227278716305408,
+    54114388906344448,
+    216739030602088448,
+    505818229730443264,
+    1011636459460886528,
+    2023272918921773056,
+    4046545837843546112,
+    8093091675687092224,
+    16186183351374184448,
+    13853283560024178688,
+    144959613005987840,
+    362258295026614272,
+    724516590053228544,
+    1449033180106457088,
+    2898066360212914176,
+    5796132720425828352,
+    11592265440851656704,
+    4665729213955833856,
+];
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -31,19 +101,21 @@ fn square_str_to_idx(square: &[char]) -> u8 {
     let file: u8 = (square[0] as u8) - 'a' as u8;
 
     let rank: u8 = (square[1] as u8) - '1' as u8;
-    assert!(rank  < 8, "square rank not 1-8");
+    assert!(rank < 8, "square rank not 1-8");
 
-    rank  * (RANK_SIZE as u8) + file
+    rank * (RANK_SIZE as u8) + file
 }
 
 fn idx_to_square_str(idx: u8) -> [char; 2] {
-    assert!(idx < BOARD_SIZE as u8, "index cannot be more than the board size");
+    assert!(
+        idx < BOARD_SIZE as u8,
+        "index cannot be more than the board size"
+    );
     let file = ('a' as u8 + idx % 8) as char;
     let rank = ('1' as u8 + idx / 8) as char;
     [file, rank]
 }
 
-#[allow(dead_code)]
 impl Board {
     pub fn from_fen(fen: &str) -> Result<Self, &'static str> {
         // Reference: https://en.wikipedia.org/wiki/Forsyth%E2%80%93Edwards_Notation
@@ -246,6 +318,231 @@ impl Board {
     fn get_piece_at(&self, sqr: &[char]) -> Option<&Piece> {
         self.pieces[square_str_to_idx(sqr) as usize].as_ref()
     }
+
+    fn get_legal_moves(&self) -> Vec<CMove> {
+        // 21 is the most moves that can be made at any time
+        // guess that i'm prioritizing speed over memory now, but meh
+        let moves = Vec::with_capacity(21);
+
+        moves
+    }
+
+    fn board_is_legal_after_move(&self) -> bool {
+        // check that the one who just moved isn't in check
+        // could probably do some bitmask magic here, where the attacks in a u64 is and:ed with the king position
+
+        let white_to_move = self.active_color_and_castle_avaliability & WHITE_TO_MOVE_MASK != 0;
+
+        for p in &self.pieces {
+            if p.is_none() {
+                continue;
+            };
+            let p = p.as_ref().unwrap();
+
+            if (p.get_color() == PieceColor::White) == white_to_move {
+                // piece of the player who just moved
+                continue;
+            }
+        }
+
+        false
+    }
+
+    fn get_attacks_for_piece(&self, idx: u8) -> u64 {
+        assert!(
+            idx < BOARD_SIZE as u8,
+            "idx cannot be larger than the board"
+        );
+
+        let p = match &self.pieces[idx as usize] {
+            Some(p) => p,
+            None => return 0,
+        };
+
+        match p.get_type() {
+            PieceType::Pawn => self.pawn_attack(idx, p), // this should also a constant, like the king values
+            PieceType::Rook => self.hori_vert_attack(idx),
+            PieceType::Knight => self.knight_attack(idx), // this too
+            PieceType::Bishop => self.hori_vert_attack(idx),
+            PieceType::Queen => self.hori_vert_attack(idx) ^ self.diag_attack(idx),
+            PieceType::King => KING_ATTACK_MASKS[idx as usize],
+        }
+    }
+
+    fn get_legal_moves_for_piece(&self, idx: u8) -> Vec<CMove> {
+        let piece = match &self.pieces[idx as usize] {
+            Some(p) => p,
+            None => return Vec::new(),
+        };
+
+        let [file, rank] = idx_to_square_str(idx);
+
+        match piece.get_type() {
+            PieceType::Pawn => {}
+            PieceType::Rook => {}
+            PieceType::Knight => {}
+            PieceType::Bishop => {}
+            PieceType::Queen => {}
+            PieceType::King => {}
+        }
+
+        Vec::new()
+    }
+
+    fn pawn_attack(&self, idx: u8, p: &Piece) -> u64 {
+        let mut result = 0;
+        let [file, _] = idx_to_square_str(idx);
+
+        // todo, this could be done beautifully branchless
+        for x in [1, -1_i8] {
+            match p.get_color() {
+                PieceColor::Black => {
+                    if file == 'a' {
+                        continue;
+                    }
+                    let i = (idx + 8) as i8 + x;
+                    if (i / 8) as u8 == (idx + 8) / 8 {
+                        result ^= 1 << i;
+                    }
+                }
+                PieceColor::White => {
+                    if file == 'h' {
+                        continue;
+                    }
+                    let i = (idx - 8) as i8 + x;
+                    if (i / 8) as u8 == (idx - 8) / 8 {
+                        result ^= 1 << i;
+                    }
+                }
+            }
+        }
+        result
+    }
+
+    fn diag_attack(&self, idx: u8) -> u64 {
+        0
+    }
+
+    // kept for informational purposes, now we use constants instead
+    #[allow(dead_code)]
+    fn king_attack(&self, idx: u8) -> u64 {
+        let mut result = 0;
+        let [file, rank] = idx_to_square_str(idx);
+
+        if rank > '1' {
+            // attack down
+            result ^= 1 << idx - 8;
+        }
+        if rank < '8' {
+            // attack up
+            result ^= 1 << idx + 8;
+        }
+        if file != 'a' {
+            // attack left
+            result ^= 1 << idx - 1;
+        }
+        if file != 'h' {
+            // attack right
+            result ^= 1 << idx + 1;
+        }
+
+        if rank != '1' && file != 'a' {
+            // attack down left
+            result ^= 1 << idx - 8 - 1;
+        }
+        if rank != '8' && file != 'a' {
+            // attack up left
+            result ^= 1 << idx + 8 - 1;
+        }
+        if rank != '1' && file != 'h' {
+            // attack down right
+            result ^= 1 << idx - 8 + 1;
+        }
+        if rank != '8' && file != 'h' {
+            // attack up right
+            result ^= 1 << idx + 8 + 1;
+        }
+
+        result
+    }
+
+    fn knight_attack(&self, idx: u8) -> u64 {
+        let [file, rank] = idx_to_square_str(idx);
+
+        // these could also be pre-computed
+
+        let mut result = 0;
+        if file != 'a' && rank < '7' {
+            // attack up left
+            result ^= 1 << idx + 2 * 8 - 1;
+        }
+        if file > 'b' && rank != '8' {
+            // attack left up
+            result ^= 1 << idx + 8 - 2;
+        }
+
+        if file != 'h' && rank < '7' {
+            // attack up right
+            result ^= 1 << idx + 2 * 8 + 1;
+        }
+        if file != 'h' && rank < '7' {
+            // attack right up
+            result ^= 1 << idx + 8 + 2;
+        }
+
+        result
+    }
+
+    fn hori_vert_attack(&self, idx: u8) -> u64 {
+        let mut result = 0;
+        for dir in [true, false] {
+            for r in 1..8 {
+                let n_idx = match dir {
+                    true => idx.checked_add(r),
+                    false => idx.checked_sub(r),
+                };
+                if n_idx.is_none() {
+                    continue;
+                }
+                let n_idx = n_idx.unwrap();
+
+                if idx / 8 != n_idx / 8 {
+                    break;
+                }
+
+                result ^= 1 << n_idx;
+
+                if self.pieces[n_idx as usize].is_some() {
+                    break;
+                }
+            }
+        }
+
+        for dir in [true, false] {
+            for r in 1..8 {
+                let n_idx = match dir {
+                    true => idx.checked_add(r * 8), // should always be fine
+                    false => idx.checked_sub(r * 8),
+                };
+                if n_idx.is_none() {
+                    continue;
+                }
+
+                let n_idx = n_idx.unwrap();
+
+                if n_idx > BOARD_SIZE as u8 {
+                    break;
+                }
+
+                result ^= 1 << n_idx;
+
+                if self.pieces[n_idx as usize].is_some() {
+                    break;
+                }
+            }
+        }
+        result
+    }
 }
 
 #[cfg(test)]
@@ -263,7 +560,7 @@ mod lib_tests {
             "rn1qkb1r/ppp1p1pp/5n2/1b1pPp2/8/3P4/PPP1KPPP/RNBQ2NR w kq - 1 6",
             "rn1qkbr1/ppp1p1pp/5n2/1b1pPp2/8/3P1N2/PPP1KPPP/RNBQ3R w q - 3 7",
             "rn1qkbr1/ppp1p1p1/5n2/1b1pP1Pp/5p2/3P1N2/PPP1KP1P/RNBQ3R w q h6 0 9",
-            "8/8/8/8/8/8/8/8 w - - 0 1"
+            "8/8/8/8/8/8/8/8 w - - 0 1",
         ];
 
         for case in cases {
@@ -344,7 +641,9 @@ mod lib_tests {
 
 #[cfg(test)]
 mod internal_tests {
-    use super::{idx_to_square_str, square_str_to_idx, BOARD_SIZE};
+    use crate::board::KING_ATTACK_MASKS;
+
+    use super::{idx_to_square_str, square_str_to_idx, Board, BOARD_SIZE};
 
     #[test]
     fn to_idx_test() {
@@ -379,6 +678,30 @@ mod internal_tests {
             for file in 'a'..='h' {
                 assert!(idx_to_square_str(square_str_to_idx(&[file, rank])) == [file, rank]);
             }
+        }
+    }
+
+    #[test]
+    fn king_attack_test() {
+        let b = Board::from_fen("8/8/8/8/8/8/8/8 w KQkq - 0 1").unwrap();
+        // _11111111
+        // _00000000
+
+        assert!(
+            b.king_attack(0)
+                == 0b_00000000_00000000_00000000_00000000_00000000_00000000_00000011_00000010
+        );
+        assert!(
+            b.king_attack(8)
+                == 0b_00000000_00000000_00000000_00000000_00000000_00000011_00000010_00000011
+        );
+        assert!(
+            b.king_attack(8 + 3)
+                == 0b_00000000_00000000_00000000_00000000_00000000_00011100_00010100_00011100
+        );
+
+        for i in 0..64 {
+            assert!(b.king_attack(i) == KING_ATTACK_MASKS[i as usize]);
         }
     }
 }
