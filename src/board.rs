@@ -363,7 +363,7 @@ impl Board {
             PieceType::Pawn => self.pawn_attack(idx, p), // this should also a constant, like the king values
             PieceType::Rook => self.hori_vert_attack(idx),
             PieceType::Knight => self.knight_attack(idx), // this too
-            PieceType::Bishop => self.hori_vert_attack(idx),
+            PieceType::Bishop => self.diag_attack(idx),
             PieceType::Queen => self.hori_vert_attack(idx) ^ self.diag_attack(idx),
             PieceType::King => KING_ATTACK_MASKS[idx as usize],
         }
@@ -420,7 +420,32 @@ impl Board {
     }
 
     fn diag_attack(&self, idx: u8) -> u64 {
-        0
+        let mut result = 0;
+
+        for f_dir in [-1_i8, 1] {
+            for r_dir in [-1_i8, 1] {
+                let [mut file, mut rank] = idx_to_square_str(idx);
+
+                for _ in 1..8 {
+                    file = ((file as i8) + f_dir) as u8 as char;
+                    rank = ((rank as i8) + r_dir) as u8 as char;
+
+                    if file < 'a' || file > 'h' || rank < '1' || rank > '8' {
+                        break;
+                    }
+
+                    let n_idx = square_str_to_idx(&[file, rank]);
+
+                    result ^= 1 << n_idx;
+
+                    if self.pieces[n_idx as usize].is_some() {
+                        break;
+                    }
+                }
+            }
+        }
+
+        result
     }
 
     // kept for informational purposes, now we use constants instead
@@ -735,6 +760,21 @@ mod internal_tests {
         assert!(
             b.hori_vert_attack(0)
                 == 0b_00000000_00000001_00000001_00000001_00000001_00000001_00000001_11111110
+        );
+    }
+
+    #[test]
+    fn diag_attack_test() {
+        let b = Board::from_fen("8/8/8/8/8/8/8/8 w KQkq - 0 1").unwrap();
+        assert!(
+            b.diag_attack(0)
+                == 0b_10000000_01000000_00100000_00010000_00001000_00000100_00000010_00000000
+        );
+
+        let b = Board::from_fen("8/pppppppp/8/8/8/8/PPPPPPPP/8 w KQkq - 0 1").unwrap();
+        assert!(
+            b.diag_attack(8 * 2 + 4)
+                == 0b_00000000_00000001_10000010_01000100_00101000_00000000_00101000_00000000
         );
     }
 }
