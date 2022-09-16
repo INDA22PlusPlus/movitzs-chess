@@ -474,7 +474,7 @@ impl Board {
         let mut result = 0;
         if file != 'a' && rank < '7' {
             // attack up left
-            result ^= 1 << idx + 2 * 8 - 1;
+            result ^= 1 << idx + 16 - 1;
         }
         if file > 'b' && rank != '8' {
             // attack left up
@@ -483,11 +483,29 @@ impl Board {
 
         if file != 'h' && rank < '7' {
             // attack up right
-            result ^= 1 << idx + 2 * 8 + 1;
+            result ^= 1 << idx + 16 + 1;
         }
-        if file != 'h' && rank < '7' {
+        if file < 'h' && rank != '8' {
             // attack right up
             result ^= 1 << idx + 8 + 2;
+        }
+
+        if file != 'a' && rank > '2' {
+            // attack down left
+            result ^= 1 << idx - 16 - 1;
+        }
+        if file > 'b' && rank != '1' {
+            // attack left down
+            result ^= 1 << idx - 8 - 2;
+        }
+
+        if file != 'h' && rank > '2' {
+            // attack down right
+            result ^= 1 << idx - 16 + 1;
+        }
+        if file < 'g' && rank != '1' {
+            // attack right down
+            result ^= 1 << idx - 8 + 2;
         }
 
         result
@@ -703,5 +721,20 @@ mod internal_tests {
         for i in 0..64 {
             assert!(b.king_attack(i) == KING_ATTACK_MASKS[i as usize]);
         }
+    }
+
+    #[test]
+    fn hori_vert_attack_test() {
+        let b = Board::from_fen("8/8/8/8/8/8/8/8 w KQkq - 0 1").unwrap();
+        assert!(
+            b.hori_vert_attack(0)
+                == 0b_00000001_00000001_00000001_00000001_00000001_00000001_00000001_11111110
+        );
+
+        let b = Board::from_fen("8/pppppppp/8/8/8/8/8/8 w KQkq - 0 1").unwrap();
+        assert!(
+            b.hori_vert_attack(0)
+                == 0b_00000000_00000001_00000001_00000001_00000001_00000001_00000001_11111110
+        );
     }
 }
