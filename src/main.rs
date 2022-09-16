@@ -1,4 +1,3 @@
-mod attacks;
 mod board;
 mod cmove;
 mod piece;
