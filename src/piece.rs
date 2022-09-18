@@ -18,6 +18,7 @@ pub enum PieceColor {
     Black,
 }
 
+#[derive(Clone, Copy)]
 pub struct Piece(u8);
 
 const PIECE_MASK: u8 = 0b00000111;

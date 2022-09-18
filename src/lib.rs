@@ -1,6 +1,8 @@
 mod cmove;
 mod piece;
 
+use std::convert::TryInto;
+
 use crate::cmove::*;
 use crate::piece::*;
 
@@ -82,7 +84,7 @@ const KING_ATTACK_MASKS: [u64; 64] = [
     4665729213955833856,
 ];
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct Board {
     active_color_and_castle_avaliability: u8, // hot path
@@ -96,7 +98,7 @@ pub struct Board {
     pieces: [Option<Piece>; BOARD_SIZE], // idx 0 => A1, idx 1 => A2, ... , idx 63 => H8
 }
 
-fn square_str_to_idx(square: &[char]) -> u8 {
+pub(crate) fn square_str_to_idx(square: &[char]) -> u8 {
     match square[0] {
         'a'..='h' => true,
         _ => panic!("square file not a-h"),
@@ -109,7 +111,7 @@ fn square_str_to_idx(square: &[char]) -> u8 {
     rank * (RANK_SIZE as u8) + file
 }
 
-fn idx_to_square_str(idx: u8) -> [char; 2] {
+pub(crate) fn idx_to_square_str(idx: u8) -> [char; 2] {
     assert!(
         idx < BOARD_SIZE as u8,
         "index cannot be more than the board size"
@@ -353,13 +355,21 @@ impl Board {
                     continue;
                 }
 
-                if self.pieces[to].is_none() || self.pieces[to].as_ref().unwrap().get_color() != ac
+                if !(self.pieces[to].is_none()
+                    || self.pieces[to].as_ref().unwrap().get_color() != ac)
                 {
-                    // the attacked square is empty or an opponents piece
-                    moves.push(CMove {
-                        from: from as u8,
-                        to: to as u8,
-                    });
+                    // square is own piece
+                    continue;
+                }
+                let mv = CMove {
+                    from: from as u8,
+                    to: to as u8,
+                };
+
+                let mut nb = self.clone();
+                nb.apply_move(&mv);
+                if nb.board_is_legal_after_move() {
+                    moves.push(mv);
                 }
             }
         }
@@ -367,25 +377,52 @@ impl Board {
         moves
     }
 
+    fn apply_move(&mut self, mv: &CMove) {
+        // todo: implement enpassant, castling, promotion
+
+        self.pieces[mv.to as usize] = self.pieces[mv.from as usize];
+        self.pieces[mv.from as usize] = Option::None;
+    }
+
     fn board_is_legal_after_move(&self) -> bool {
         // check that the one who just moved isn't in check
         // could probably do some bitmask magic here, where the attacks in a u64 is and:ed with the king position
 
-        let white_to_move = self.active_color_and_castle_avaliability & WHITE_TO_MOVE_MASK != 0;
+        let ac = self.get_active_color();
 
-        for p in &self.pieces {
+        let mut king_square: u8 = u8::MAX;
+
+        for (i, p) in self.pieces.into_iter().enumerate() {
+            if p.is_some()
+                && p.unwrap().get_type() == PieceType::King
+                && p.unwrap().get_color() == ac
+            {
+                king_square = i as u8;
+                break;
+            }
+        }
+
+        if king_square == u8::MAX {
+            panic!("no king detected, invalid board state");
+        }
+
+        for (i, p) in self.pieces.into_iter().enumerate() {
             if p.is_none() {
                 continue;
             };
             let p = p.as_ref().unwrap();
 
-            if (p.get_color() == PieceColor::White) == white_to_move {
+            if p.get_color() == ac {
                 // piece of the player who just moved
                 continue;
             }
+
+            if (self.get_attacks_for_piece(i as u8) & 1 << king_square) != 0 {
+                return false;
+            }
         }
 
-        false
+        true
     }
 
     fn get_attacks_for_piece(&self, idx: u8) -> u64 {
@@ -400,9 +437,9 @@ impl Board {
         };
 
         match p.get_type() {
-            PieceType::Pawn => self.pawn_attack(idx, p), // this should also a constant, like the king values
+            PieceType::Pawn => self.pawn_attack(idx),
             PieceType::Rook => self.hori_vert_attack(idx),
-            PieceType::Knight => self.knight_attack(idx), // this too
+            PieceType::Knight => self.knight_attack(idx),
             PieceType::Bishop => self.diag_attack(idx),
             PieceType::Queen => self.hori_vert_attack(idx) ^ self.diag_attack(idx),
             PieceType::King => KING_ATTACK_MASKS[idx as usize],
@@ -417,43 +454,33 @@ impl Board {
 
         let [file, rank] = idx_to_square_str(idx);
 
-        match piece.get_type() {
-            PieceType::Pawn => {}
-            PieceType::Rook => {}
-            PieceType::Knight => {}
-            PieceType::Bishop => {}
-            PieceType::Queen => {}
-            PieceType::King => {}
-        }
-
         Vec::new()
     }
 
-    fn pawn_attack(&self, idx: u8, p: &Piece) -> u64 {
+    fn pawn_attack(&self, idx: u8) -> u64 {
         let mut result = 0;
         let [file, _] = idx_to_square_str(idx);
 
-        // todo, this could be done beautifully branchless
-        for x in [1, -1_i8] {
-            match p.get_color() {
-                PieceColor::Black => {
-                    if file == 'a' {
-                        continue;
-                    }
-                    let i = (idx + 8) as i8 + x;
-                    if (i / 8) as u8 == (idx + 8) / 8 {
-                        result ^= 1 << i;
-                    }
-                }
-                PieceColor::White => {
-                    if file == 'h' {
-                        continue;
-                    }
-                    let i = (idx - 8) as i8 + x;
-                    if (i / 8) as u8 == (idx - 8) / 8 {
-                        result ^= 1 << i;
-                    }
-                }
+        let color = self.pieces[idx as usize].unwrap().get_color();
+
+        let idx = idx as i8;
+
+        for att_mv in [1, -1_i8] {
+            if (color == PieceColor::Black && file == 'a')
+                || (color == PieceColor::White && file == 'h')
+            {
+                continue;
+            }
+
+            let dir: i8 = if color == PieceColor::White { 8 } else { -8 };
+
+            let att_sqr = idx + dir + att_mv;
+            if att_sqr < 0 || att_sqr >= BOARD_SIZE as i8 {
+                continue;
+            }
+
+            if (att_sqr / 8) == (idx + dir) / 8 {
+                result ^= 1 << att_sqr;
             }
         }
         result
@@ -613,7 +640,7 @@ impl Board {
 
                 let n_idx = n_idx.unwrap();
 
-                if n_idx > BOARD_SIZE as u8 {
+                if n_idx >= BOARD_SIZE as u8 {
                     break;
                 }
 
@@ -728,9 +755,10 @@ mod internal_tests {
 
     use super::{idx_to_square_str, square_str_to_idx, Board, BOARD_SIZE};
 
+    const STARTING_FEN: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+
     #[test]
     fn to_idx_test() {
-        // standard initial setup
         assert!(square_str_to_idx(&['a', '1']) == 0);
         assert!(square_str_to_idx(&['b', '1']) == 1);
         assert!(square_str_to_idx(&['c', '1']) == 2);
@@ -767,8 +795,6 @@ mod internal_tests {
     #[test]
     fn king_attack_test() {
         let b = Board::from_fen("8/8/8/8/8/8/8/8 w KQkq - 0 1").unwrap();
-        // _11111111
-        // _00000000
 
         assert!(
             b.king_attack(0)
@@ -819,5 +845,25 @@ mod internal_tests {
     }
 
     #[test]
-    fn get_legal_moves_test() {}
+    fn pawn_attack_test() {
+        let b = Board::from_fen("8/pppppppp/8/8/8/8/PPPPPPPP/8 w KQkq - 0 1").unwrap();
+        assert!(
+            b.pawn_attack(8)
+                == 0b_00000000_00000000_00000000_00000000_00000000_00000010_00000000_00000000
+        );
+
+        assert!(
+            b.pawn_attack(9)
+                == 0b_00000000_00000000_00000000_00000000_00000000_00000101_00000000_00000000
+        );
+    }
+
+    #[test]
+    fn get_legal_moves_test() {
+        let b = Board::from_fen(STARTING_FEN).unwrap();
+
+        for i in b.get_legal_moves() {
+            // println!("{:?}", i);
+        }
+    }
 }
