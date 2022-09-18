@@ -1,6 +1,5 @@
 use std::fmt;
 
-
 #[repr(u8)]
 #[derive(Debug, PartialEq)]
 pub enum PieceType {
@@ -50,17 +49,16 @@ impl Piece {
     pub fn get_color(&self) -> PieceColor {
         if (self.0 as u8) & COLOR_MASK == 0 {
             return PieceColor::Black;
-        } 
+        }
         PieceColor::White
     }
-
 }
 
 impl fmt::Debug for Piece {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Piece")
-         .field("type", &self.get_type())
-         .field("color", &self.get_color())
-         .finish()
+            .field("type", &self.get_type())
+            .field("color", &self.get_color())
+            .finish()
     }
 }

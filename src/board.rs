@@ -218,7 +218,7 @@ impl Board {
         })
     }
 
-    fn to_fen(&self) -> String {
+    pub fn to_fen(&self) -> String {
         let mut fen = String::new();
 
         for rank in (0..=7).rev() {
@@ -327,10 +327,39 @@ impl Board {
         }
     }
 
-    fn get_legal_moves(&self) -> Vec<CMove> {
-        // 21 is the most moves that can be made at any time
-        // guess that i'm prioritizing speed over memory now, but meh
-        let moves = Vec::with_capacity(21);
+    pub fn get_legal_moves(&self) -> Vec<CMove> {
+        let mut moves = Vec::with_capacity(100);
+
+        let ac = self.get_active_color();
+
+        for (from, piece) in (&self.pieces).into_iter().enumerate() {
+            if piece.is_none() {
+                continue;
+            }
+            let piece = piece.as_ref().unwrap();
+
+            if ac != piece.get_color() {
+                continue;
+            }
+
+            let attack_mask = self.get_attacks_for_piece(from as u8);
+
+            for to in 0..64 {
+                if attack_mask & 1 << to == 0 {
+                    // we are not attacking that square
+                    continue;
+                }
+
+                if self.pieces[to].is_none() || self.pieces[to].as_ref().unwrap().get_color() != ac
+                {
+                    // the attacked square is empty or an opponents piece
+                    moves.push(CMove {
+                        from: from as u8,
+                        to: to as u8,
+                    });
+                }
+            }
+        }
 
         moves
     }
@@ -785,4 +814,7 @@ mod internal_tests {
                 == 0b_00000000_00000001_10000010_01000100_00101000_00000000_00101000_00000000
         );
     }
+
+    #[test]
+    fn get_legal_moves_test() {}
 }
