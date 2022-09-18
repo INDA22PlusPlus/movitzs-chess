@@ -319,6 +319,14 @@ impl Board {
         self.pieces[square_str_to_idx(sqr) as usize].as_ref()
     }
 
+    pub fn get_active_color(&self) -> PieceColor {
+        if self.active_color_and_castle_avaliability & WHITE_TO_MOVE_MASK != 0 {
+            PieceColor::White
+        } else {
+            PieceColor::Black
+        }
+    }
+
     fn get_legal_moves(&self) -> Vec<CMove> {
         // 21 is the most moves that can be made at any time
         // guess that i'm prioritizing speed over memory now, but meh
