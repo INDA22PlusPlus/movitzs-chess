@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::{idx_to_square_str, piece::Piece, square_str_to_idx, Board};
+use crate::idx_to_square_str;
 
 pub struct CMove {
     // ... could fit some metadata here, maybe w/b to move? promotion?

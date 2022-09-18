@@ -4,6 +4,9 @@ mod piece;
 use crate::cmove::*;
 use crate::piece::*;
 
+use lazy_static::lazy_static;
+use regex::Regex;
+
 const RANK_SIZE: usize = 8;
 const BOARD_SIZE: usize = RANK_SIZE * RANK_SIZE;
 
@@ -122,26 +125,45 @@ pub(crate) fn idx_to_square_str(idx: u8) -> [char; 2] {
 impl Board {
     pub fn from_fen(fen: &str) -> Result<Self, &'static str> {
         // Reference: https://en.wikipedia.org/wiki/Forsyth%E2%80%93Edwards_Notation
-        let fen: Vec<char> = fen.chars().collect();
+        lazy_static! {
+            static ref ENPS_STR_RE: Regex = Regex::new("^-|[a-h][1-8]$").unwrap();
+        }
+        if !fen.is_ascii() {
+            return Err("fen input contains non-ascii");
+        }
+
+        let fen: Vec<&str> = fen.split_ascii_whitespace().collect();
+        if fen.len() != 6 {
+            return Err("fen not six parts");
+        }
+        if fen[1].len() != 1 {
+            return Err("len(side to move) != 1");
+        }
+        if !ENPS_STR_RE.is_match(fen[3]) {
+            return Err("len(side to move) != 1");
+        }
 
         const INIT: Option<Piece> = None; // https://github.com/rust-lang/rust/issues/44796
         let mut pieces = [INIT; BOARD_SIZE];
 
-        let mut i = 0;
         let mut rank = 7;
         let mut file = 0;
 
-        while fen[i] != ' ' {
-            let c = fen[i];
-            i += 1;
-
+        let board_part = fen[0];
+        for c in board_part.chars() {
             if c == '/' {
+                if rank == 0 {
+                    return Err("too many ranks");
+                }
                 rank -= 1;
                 file = 0;
                 continue;
             }
             if c.is_numeric() {
                 file += c.to_digit(10).unwrap() as usize;
+                if file > 8 {
+                    return Err("too many files");
+                }
                 continue;
             }
             if c.is_alphabetic() {
@@ -158,6 +180,10 @@ impl Board {
                     'q' => PieceType::Queen,
                     _ => return Err("unknown piece"),
                 };
+                let idx = rank * 8 + file;
+                if idx >= 64 {
+                    return Err("piece placement invalid");
+                }
                 pieces[rank * 8 + file] = Some(Piece::new(piece_type, color));
                 file += 1;
                 continue;
@@ -166,18 +192,14 @@ impl Board {
             return Err("unknown character in piece placement string");
         }
 
-        i += 1; // skip whitespace
-
-        let mut ac_a_ca = match fen[i] {
+        let mut ac_a_ca = match fen[1].chars().nth(0).unwrap() {
             'w' => WHITE_TO_MOVE_MASK,
             'b' => 0,
             _ => return Err("next to move invalid"),
         };
 
-        i += 2; // skip whitespace
-
-        while fen[i] != ' ' {
-            match fen[i] {
+        for c in fen[2].chars() {
+            match c {
                 'q' => ac_a_ca ^= BLACK_QUEEN_CASTLE_MASK,
                 'k' => ac_a_ca ^= BLACK_KING_CASTLE_MASK,
                 'Q' => ac_a_ca ^= WHITE_QUEEN_CASTLE_MASK,
@@ -187,29 +209,27 @@ impl Board {
                     return Err("castle avaliability invalid");
                 }
             }
-            i += 1;
         }
 
-        i += 1; // skip whitespace
-
-        let parts: Vec<&[char]> = fen[i..].split(|y| *y == ' ').collect();
-
-        let half_moves = match parts[1].iter().collect::<String>().parse() {
+        let half_moves = match fen[4].parse() {
             Ok(hm) => hm,
             Err(_) => {
                 return Err("half moves not an int");
             }
         };
-        let full_moves = match parts[2].iter().collect::<String>().parse() {
+        let full_moves = match fen[5].parse() {
             Ok(fm) => fm,
             Err(_) => {
                 return Err("full moves not an int");
             }
         };
 
-        let en_passant_square = match parts[0] {
-            ['-'] => u8::MAX,
-            _ => square_str_to_idx(parts[0]),
+        let en_passant_square = match fen[3].chars().nth(0).unwrap() {
+            '-' => u8::MAX,
+            _ => square_str_to_idx(&[
+                fen[3].chars().nth(0).unwrap(), // todo wtf happened here
+                fen[3].chars().nth(1).unwrap(),
+            ]),
         };
 
         Ok(Board {
@@ -311,9 +331,9 @@ impl Board {
 
         fen.push(' ');
 
-        fen.push(char::from_digit(self.half_moves as u32, 10).unwrap());
+        fen.push_str(self.half_moves.to_string().as_str());
         fen.push(' ');
-        fen.push(char::from_digit(self.full_moves as u32, 10).unwrap());
+        fen.push_str(self.full_moves.to_string().as_str());
 
         return fen;
     }
