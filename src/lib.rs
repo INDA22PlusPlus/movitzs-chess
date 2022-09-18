@@ -126,13 +126,13 @@ impl Board {
     pub fn from_fen(fen: &str) -> Result<Self, &'static str> {
         // Reference: https://en.wikipedia.org/wiki/Forsyth%E2%80%93Edwards_Notation
         lazy_static! {
-            static ref ENPS_STR_RE: Regex = Regex::new("^-|[a-h][1-8]$").unwrap();
+            static ref ENPS_STR_RE: Regex = Regex::new(r"(?i)^-$|^[a-h][1-8]$").unwrap();
         }
         if !fen.is_ascii() {
             return Err("fen input contains non-ascii");
         }
 
-        let fen: Vec<&str> = fen.split_ascii_whitespace().collect();
+        let fen: Vec<&str> = fen.split(|f| f == ' ').collect();
         if fen.len() != 6 {
             return Err("fen not six parts");
         }
@@ -224,11 +224,12 @@ impl Board {
             }
         };
 
-        let en_passant_square = match fen[3].chars().nth(0).unwrap() {
+        let ensq: Vec<char> = fen[3].chars().collect();
+        let en_passant_square = match ensq[0] {
             '-' => u8::MAX,
             _ => square_str_to_idx(&[
-                fen[3].chars().nth(0).unwrap(), // todo wtf happened here
-                fen[3].chars().nth(1).unwrap(),
+                ensq[0].to_ascii_lowercase(), // todo wtf happened here
+                ensq[1],
             ]),
         };
 
