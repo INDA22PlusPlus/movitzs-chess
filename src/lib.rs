@@ -1,8 +1,6 @@
 mod cmove;
 mod piece;
 
-use std::convert::TryInto;
-
 use crate::cmove::*;
 use crate::piece::*;
 
