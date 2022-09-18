@@ -1,3 +1,6 @@
+mod cmove;
+mod piece;
+
 use crate::cmove::*;
 use crate::piece::*;
 
@@ -721,7 +724,7 @@ mod lib_tests {
 
 #[cfg(test)]
 mod internal_tests {
-    use crate::board::KING_ATTACK_MASKS;
+    use crate::KING_ATTACK_MASKS;
 
     use super::{idx_to_square_str, square_str_to_idx, Board, BOARD_SIZE};
 
