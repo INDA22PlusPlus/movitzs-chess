@@ -1,3 +1,4 @@
+#![feature(let_chains)]
 mod cmove;
 mod piece;
 
@@ -121,7 +122,17 @@ pub(crate) fn idx_to_square_str(idx: u8) -> [char; 2] {
     [file, rank]
 }
 
+impl Default for Board {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Board {
+    pub fn new() -> Self {
+        Self::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap()
+    }
+
     pub fn from_fen(fen: &str) -> Result<Self, &'static str> {
         // Reference: https://en.wikipedia.org/wiki/Forsyth%E2%80%93Edwards_Notation
         lazy_static! {
@@ -197,6 +208,10 @@ impl Board {
             _ => return Err("next to move invalid"),
         };
 
+        if fen[2].is_empty() {
+            return Err("castle avaliability len can not be 0");
+        }
+
         for c in fen[2].chars() {
             match c {
                 'q' => ac_a_ca |= BLACK_QUEEN_CASTLE_MASK,
@@ -232,13 +247,19 @@ impl Board {
             ]),
         };
 
-        Ok(Board {
+        let b = Board {
             pieces,
             active_color_and_castle_avaliability: ac_a_ca,
             full_moves,
             half_moves,
             en_passant_square,
-        })
+        };
+
+        if !b.valid_kings() {
+            return Err("kings not valid");
+        }
+
+        Ok(b)
     }
 
     pub fn to_fen(&self) -> String {
@@ -346,6 +367,33 @@ impl Board {
         }
     }
 
+    pub fn valid_kings(&self) -> bool {
+        let kings: Vec<(usize, Piece)> = self
+            .pieces
+            .iter()
+            .enumerate()
+            .filter(|(_, p)| p.is_some() && p.unwrap().get_type() == PieceType::King)
+            .map(|(i, p)| (i, p.unwrap()))
+            .collect();
+
+        if kings.len() != 2 {
+            return false;
+        }
+
+        if kings[0].1.get_color() == kings[1].1.get_color() {
+            return false;
+        }
+
+        if KING_ATTACK_MASKS[kings[0].0] & 1 << kings[1].0 != 0
+            || KING_ATTACK_MASKS[kings[1].0] & 1 << kings[0].0 != 0
+        {
+            // make sure that the kings aren't attackig each other
+            return false;
+        }
+
+        true
+    }
+
     pub fn get_legal_moves(&self) -> Vec<CMove> {
         let mut moves = Vec::with_capacity(100);
 
@@ -379,6 +427,14 @@ impl Board {
                     // square is own piece
                     continue;
                 }
+                if self.pieces[to].is_some()
+                    && self.pieces[to].as_ref().unwrap().get_type() == PieceType::King
+                {
+                    // should not happen with a valid board, but just don't capture the king pls
+                    // this is here for fuzzing to work, but remove this when proper checks are in place
+                    continue;
+                }
+
                 let mv = CMove {
                     from: from as u8,
                     to: to as u8,
@@ -386,8 +442,7 @@ impl Board {
                 };
 
                 let mut nb = self.clone();
-                nb.apply_move(&mv);
-                if nb.board_is_legal_after_move() {
+                if nb.apply_move(&mv).is_ok() {
                     moves.push(mv);
                 }
             }
@@ -396,52 +451,89 @@ impl Board {
         moves
     }
 
-    fn apply_move(&mut self, mv: &CMove) {
-        // todo: implement enpassant, castling, promotion
+    fn apply_move(&mut self, mv: &CMove) -> Result<(), &'static str> {
+        // todo: implement en passant, castling, promotion
 
-        self.pieces[mv.to as usize] = self.pieces[mv.from as usize];
-        self.pieces[mv.from as usize] = Option::None;
+        let from_piece = self.pieces[mv.from as usize];
+        let to_piece = self.pieces[mv.to as usize];
+
+        if from_piece.is_none() {
+            return Err("from square is empty");
+        }
+
+        if to_piece.is_some() && to_piece.unwrap().get_color() == from_piece.unwrap().get_color() {
+            return Err("can not capture own piece");
+        }
+
+        let ac = self.get_active_color();
+        if from_piece.unwrap().get_color() != ac {
+            return Err("from color is not active");
+        }
+
+        if ac == PieceColor::Black {
+            self.full_moves += 1;
+        }
+
+        self.active_color_and_castle_avaliability ^= WHITE_TO_MOVE_MASK;
+
+        self.pieces[mv.to as usize] = from_piece;
+        self.pieces[mv.from as usize] = None;
+
+        if from_piece.unwrap().get_type() == PieceType::King {
+            let mask = if ac == PieceColor::White {
+                WHITE_KING_CASTLE_MASK | WHITE_QUEEN_CASTLE_MASK
+            } else {
+                BLACK_KING_CASTLE_MASK | BLACK_QUEEN_CASTLE_MASK
+            };
+            self.active_color_and_castle_avaliability &= !mask;
+        }
+
+        if from_piece.unwrap().get_type() == PieceType::Rook {
+            match mv.from {
+                0 => {
+                    self.active_color_and_castle_avaliability &= !WHITE_QUEEN_CASTLE_MASK;
+                }
+                7 => {
+                    self.active_color_and_castle_avaliability &= !WHITE_KING_CASTLE_MASK;
+                }
+                53 => {
+                    self.active_color_and_castle_avaliability &= !BLACK_QUEEN_CASTLE_MASK;
+                }
+                63 => {
+                    self.active_color_and_castle_avaliability &= !BLACK_KING_CASTLE_MASK;
+                }
+                _ => {}
+            }
+        }
+
+        if self.active_king_is_checked() {
+            return Err("your king is in check bruv");
+        }
+
+        Ok(())
     }
 
-    fn board_is_legal_after_move(&self) -> bool {
+    fn active_king_is_checked(&self) -> bool {
         // check that the one who just moved isn't in check
 
         let ac = self.get_active_color();
 
-        let mut king_square: u8 = u8::MAX;
+        // @castor, okok, bitmaps would be nicer
+        let king_square = self
+            .pieces
+            .iter()
+            .enumerate()
+            .filter(|(_, p)| p.is_some())
+            .map(|(i, p)| (i, p.unwrap()))
+            .find(|(_, p)| p.get_type() == PieceType::King && p.get_color() == ac)
+            .expect("could not find king")
+            .0;
 
-        for (i, p) in self.pieces.into_iter().enumerate() {
-            if p.is_some()
-                && p.unwrap().get_type() == PieceType::King
-                && p.unwrap().get_color() == ac
-            {
-                king_square = i as u8;
-                break;
-            }
-        }
-
-        if king_square == u8::MAX {
-            panic!("no king detected, invalid board state");
-        }
-
-        for (i, p) in self.pieces.into_iter().enumerate() {
-            if p.is_none() {
-                continue;
-            };
-            let p = p.as_ref().unwrap();
-
-            if p.get_color() == ac {
-                // piece of the player who just moved
-                continue;
-            }
-
-            if (self.get_attacks_for_piece(i as u8) & 1 << king_square) != 0 {
-                // own king is attacked, move invalid
-                return false;
-            }
-        }
-
-        true
+        self.pieces
+            .iter()
+            .enumerate()
+            .filter(|(_, p)| p.is_some() && p.unwrap().get_color() != ac)
+            .any(|(i, _)| self.get_attacks_for_piece(i as u8) & 1 << king_square != 0)
     }
 
     fn get_attacks_for_piece(&self, idx: u8) -> u64 {
@@ -557,7 +649,7 @@ impl Board {
 
     // kept for informational and testing purposes, now we use constants instead
     #[allow(dead_code)]
-    fn king_attack(&self, idx: u8) -> u64 {
+    fn king_attack(idx: u8) -> u64 {
         let mut result = 0;
         let [file, rank] = idx_to_square_str(idx);
 
@@ -617,7 +709,7 @@ impl Board {
             // attack up right
             result |= 1 << (idx + 16 + 1);
         }
-        if file < 'h' && rank != '8' {
+        if file < 'g' && rank != '8' {
             // attack right up
             result |= 1 << (idx + 8 + 2);
         }
@@ -698,6 +790,7 @@ impl Board {
 #[cfg(test)]
 mod lib_tests {
     use crate::{
+        cmove::CMove,
         piece::{PieceColor, PieceType},
         square_str_to_idx,
     };
@@ -713,13 +806,21 @@ mod lib_tests {
             "rn1qkb1r/ppp1p1pp/5n2/1b1pPp2/8/3P4/PPP1KPPP/RNBQ2NR w kq - 1 6",
             "rn1qkbr1/ppp1p1pp/5n2/1b1pPp2/8/3P1N2/PPP1KPPP/RNBQ3R w q - 3 7",
             "rn1qkbr1/ppp1p1p1/5n2/1b1pP1Pp/5p2/3P1N2/PPP1KP1P/RNBQ3R w q h6 0 9",
-            "8/8/8/8/8/8/8/8 w - - 0 1",
         ];
 
         for case in cases {
             let out_fen = Board::from_fen(case).unwrap().to_fen();
             assert_eq!(out_fen, case);
         }
+    }
+
+    #[test]
+    fn king_checked_test() {
+        let b = Board::from_fen("RkRRKR w Q - 0 0").unwrap();
+
+        b.get_legal_moves().iter().for_each(|f| {
+            println!("{:?}", f);
+        });
     }
 
     #[test]
@@ -790,6 +891,47 @@ mod lib_tests {
             }
         }
     }
+
+    #[test]
+    fn make_moves() {
+        let mut b = Board::default();
+
+        b.apply_move(&CMove {
+            from: 12,
+            to: 20,
+            promote_to: PieceType::Pawn,
+        })
+        .unwrap();
+
+        assert_eq!(
+            b.to_fen(),
+            "rnbqkbnr/pppppppp/8/8/8/4P3/PPPP1PPP/RNBQKBNR b KQkq - 0 1"
+        );
+
+        b.apply_move(&CMove {
+            from: 50,
+            to: 42,
+            promote_to: PieceType::Pawn,
+        })
+        .unwrap();
+
+        assert_eq!(
+            b.to_fen(),
+            "rnbqkbnr/pp1ppppp/2p5/8/8/4P3/PPPP1PPP/RNBQKBNR w KQkq - 0 2"
+        );
+
+        b.apply_move(&CMove {
+            from: 4,
+            to: 12,
+            promote_to: PieceType::Pawn,
+        })
+        .unwrap();
+
+        assert_eq!(
+            b.to_fen(),
+            "rnbqkbnr/pp1ppppp/2p5/8/8/4P3/PPPPKPPP/RNBQ1BNR b kq - 0 2"
+        );
+    }
 }
 
 #[cfg(test)]
@@ -841,35 +983,33 @@ mod internal_tests {
 
     #[test]
     fn king_attack_test() {
-        let b = Board::from_fen("8/8/8/8/8/8/8/8 w KQkq - 0 1").unwrap();
-
         assert_eq!(
-            b.king_attack(0),
+            Board::king_attack(0),
             0b_00000000_00000000_00000000_00000000_00000000_00000000_00000011_00000010
         );
         assert_eq!(
-            b.king_attack(8),
+            Board::king_attack(8),
             0b_00000000_00000000_00000000_00000000_00000000_00000011_00000010_00000011
         );
         assert_eq!(
-            b.king_attack(8 + 3),
+            Board::king_attack(8 + 3),
             0b_00000000_00000000_00000000_00000000_00000000_00011100_00010100_00011100
         );
 
         for i in 0..64 {
-            assert_eq!(b.king_attack(i), KING_ATTACK_MASKS[i as usize]);
+            assert_eq!(Board::king_attack(i), KING_ATTACK_MASKS[i as usize]);
         }
     }
 
     #[test]
     fn hori_vert_attack_test() {
-        let b = Board::from_fen("8/8/8/8/8/8/8/8 w KQkq - 0 1").unwrap();
+        let b = Board::from_fen("k1K5/8/8/8/8/8/8/8 w KQkq - 0 1").unwrap(); // uhm
         assert_eq!(
             b.hori_vert_attack(0),
             0b_00000001_00000001_00000001_00000001_00000001_00000001_00000001_11111110
         );
 
-        let b = Board::from_fen("8/pppppppp/8/8/8/8/8/8 w KQkq - 0 1").unwrap();
+        let b = Board::from_fen("k1K5/pppppppp/8/8/8/8/8/8 w KQkq - 0 1").unwrap();
         assert_eq!(
             b.hori_vert_attack(0),
             0b_00000000_00000001_00000001_00000001_00000001_00000001_00000001_11111110
@@ -877,14 +1017,23 @@ mod internal_tests {
     }
 
     #[test]
+    fn knight_attack_test() {
+        let b = Board::default();
+
+        for i in 0..64 {
+            b.knight_attack(i);
+        }
+    }
+
+    #[test]
     fn diag_attack_test() {
-        let b = Board::from_fen("8/8/8/8/8/8/8/8 w KQkq - 0 1").unwrap();
+        let b = Board::from_fen("8/8/8/8/8/8/8/2k1K3 w KQkq - 0 1").unwrap();
         assert_eq!(
             b.diag_attack(0),
             0b_10000000_01000000_00100000_00010000_00001000_00000100_00000010_00000000
         );
 
-        let b = Board::from_fen("8/pppppppp/8/8/8/8/PPPPPPPP/8 w KQkq - 0 1").unwrap();
+        let b = Board::default();
         assert_eq!(
             b.diag_attack(8 * 2 + 4),
             0b_00000000_00000001_10000010_01000100_00101000_00000000_00101000_00000000
@@ -893,7 +1042,7 @@ mod internal_tests {
 
     #[test]
     fn pawn_attack_test() {
-        let b = Board::from_fen("8/pppppppp/8/8/8/8/PPPPPPPP/8 w KQkq - 0 1").unwrap();
+        let b = Board::from_fen("k7/pppppppp/8/8/8/8/PPPPPPPP/K7 w KQkq - 0 1").unwrap();
         assert_eq!(
             b.pawn_attack(8),
             0b_00000000_00000000_00000000_00000000_00000000_00000010_00000000_00000000
