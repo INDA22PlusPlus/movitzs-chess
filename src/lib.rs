@@ -199,10 +199,10 @@ impl Board {
 
         for c in fen[2].chars() {
             match c {
-                'q' => ac_a_ca ^= BLACK_QUEEN_CASTLE_MASK,
-                'k' => ac_a_ca ^= BLACK_KING_CASTLE_MASK,
-                'Q' => ac_a_ca ^= WHITE_QUEEN_CASTLE_MASK,
-                'K' => ac_a_ca ^= WHITE_KING_CASTLE_MASK,
+                'q' => ac_a_ca |= BLACK_QUEEN_CASTLE_MASK,
+                'k' => ac_a_ca |= BLACK_KING_CASTLE_MASK,
+                'Q' => ac_a_ca |= WHITE_QUEEN_CASTLE_MASK,
+                'K' => ac_a_ca |= WHITE_KING_CASTLE_MASK,
                 '-' => {}
                 _ => {
                     return Err("castle avaliability invalid");
@@ -364,7 +364,7 @@ impl Board {
             let mut move_mask = self.get_attacks_for_piece(from as u8);
 
             if piece.get_type() == PieceType::Pawn {
-                move_mask ^= self.pawn_moves(from as u8);
+                move_mask |= self.pawn_moves(from as u8);
             }
 
             for to in 0..64 {
@@ -491,7 +491,7 @@ impl Board {
             || (color == PieceColor::White && rank == '2'))
             && self.pieces[(idx + dir * 2) as usize].is_none()
         {
-            result ^= 1 << (idx + dir * 2);
+            result |= 1 << (idx + dir * 2);
         }
 
         result
@@ -563,36 +563,36 @@ impl Board {
 
         if rank > '1' {
             // attack down
-            result ^= 1 << (idx - 8);
+            result |= 1 << (idx - 8);
         }
         if rank < '8' {
             // attack up
-            result ^= 1 << (idx + 8);
+            result |= 1 << (idx + 8);
         }
         if file != 'a' {
             // attack left
-            result ^= 1 << (idx - 1);
+            result |= 1 << (idx - 1);
         }
         if file != 'h' {
             // attack right
-            result ^= 1 << (idx + 1);
+            result |= 1 << (idx + 1);
         }
 
         if rank != '1' && file != 'a' {
             // attack down left
-            result ^= 1 << (idx - 8 - 1);
+            result |= 1 << (idx - 8 - 1);
         }
         if rank != '8' && file != 'a' {
             // attack up left
-            result ^= 1 << (idx + 8 - 1);
+            result |= 1 << (idx + 8 - 1);
         }
         if rank != '1' && file != 'h' {
             // attack down right
-            result ^= 1 << (idx - 8 + 1);
+            result |= 1 << (idx - 8 + 1);
         }
         if rank != '8' && file != 'h' {
             // attack up right
-            result ^= 1 << (idx + 8 + 1);
+            result |= 1 << (idx + 8 + 1);
         }
 
         result
@@ -606,38 +606,38 @@ impl Board {
         let mut result = 0;
         if file != 'a' && rank < '7' {
             // attack up left
-            result ^= 1 << (idx + 16 - 1);
+            result |= 1 << (idx + 16 - 1);
         }
         if file > 'b' && rank != '8' {
             // attack left up
-            result ^= 1 << (idx + 8 - 2);
+            result |= 1 << (idx + 8 - 2);
         }
 
         if file != 'h' && rank < '7' {
             // attack up right
-            result ^= 1 << (idx + 16 + 1);
+            result |= 1 << (idx + 16 + 1);
         }
         if file < 'h' && rank != '8' {
             // attack right up
-            result ^= 1 << (idx + 8 + 2);
+            result |= 1 << (idx + 8 + 2);
         }
 
         if file != 'a' && rank > '2' {
             // attack down left
-            result ^= 1 << (idx - 16 - 1);
+            result |= 1 << (idx - 16 - 1);
         }
         if file > 'b' && rank != '1' {
             // attack left down
-            result ^= 1 << (idx - 8 - 2);
+            result |= 1 << (idx - 8 - 2);
         }
 
         if file != 'h' && rank > '2' {
             // attack down right
-            result ^= 1 << (idx - 16 + 1);
+            result |= 1 << (idx - 16 + 1);
         }
         if file < 'g' && rank != '1' {
             // attack right down
-            result ^= 1 << (idx - 8 + 2);
+            result |= 1 << (idx - 8 + 2);
         }
 
         result
@@ -660,7 +660,7 @@ impl Board {
                     break;
                 }
 
-                result ^= 1 << n_idx;
+                result |= 1 << n_idx;
 
                 if self.pieces[n_idx as usize].is_some() {
                     break;
@@ -684,7 +684,7 @@ impl Board {
                     break;
                 }
 
-                result ^= 1 << n_idx;
+                result |= 1 << n_idx;
 
                 if self.pieces[n_idx as usize].is_some() {
                     break;
@@ -718,10 +718,7 @@ mod lib_tests {
 
         for case in cases {
             let out_fen = Board::from_fen(case).unwrap().to_fen();
-            assert!(
-                out_fen == case,
-                "in didn't match out, expected: {case}, got: {out_fen}"
-            );
+            assert_eq!(out_fen, case);
         }
     }
 
@@ -732,9 +729,9 @@ mod lib_tests {
         let b =
             Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
 
-        assert!(b.en_passant_square == u8::MAX);
-        assert!(b.half_moves == 0);
-        assert!(b.full_moves == 1); // todo this is internal
+        assert_eq!(b.en_passant_square, u8::MAX);
+        assert_eq!(b.half_moves, 0);
+        assert_eq!(b.full_moves, 1);
 
         for file in 'a'..='h' {
             for rank in '1'..='8' {
@@ -747,20 +744,23 @@ mod lib_tests {
 
                 let p = p.unwrap();
                 if rank <= '2' {
-                    assert!(
-                        p.get_color() == PieceColor::White,
+                    assert_eq!(
+                        p.get_color(),
+                        PieceColor::White,
                         "piece color must be white"
                     );
                 } else if rank >= '7' {
-                    assert!(
-                        p.get_color() == PieceColor::Black,
+                    assert_eq!(
+                        p.get_color(),
+                        PieceColor::Black,
                         "piece color must be black"
                     );
                 }
 
                 if rank == '7' || rank == '2' {
-                    assert!(
-                        p.get_type() == PieceType::Pawn,
+                    assert_eq!(
+                        p.get_type(),
+                        PieceType::Pawn,
                         "2/7th rank must be all pawns"
                     );
                 }
@@ -803,35 +803,38 @@ mod internal_tests {
 
     #[test]
     fn to_idx_test() {
-        assert!(square_str_to_idx(&['a', '1']) == 0);
-        assert!(square_str_to_idx(&['b', '1']) == 1);
-        assert!(square_str_to_idx(&['c', '1']) == 2);
-        assert!(square_str_to_idx(&['d', '1']) == 3);
-        assert!(square_str_to_idx(&['e', '1']) == 4);
-        assert!(square_str_to_idx(&['f', '1']) == 5);
-        assert!(square_str_to_idx(&['g', '1']) == 6);
-        assert!(square_str_to_idx(&['h', '1']) == 7);
+        assert_eq!(square_str_to_idx(&['a', '1']), 0);
+        assert_eq!(square_str_to_idx(&['b', '1']), 1);
+        assert_eq!(square_str_to_idx(&['c', '1']), 2);
+        assert_eq!(square_str_to_idx(&['d', '1']), 3);
+        assert_eq!(square_str_to_idx(&['e', '1']), 4);
+        assert_eq!(square_str_to_idx(&['f', '1']), 5);
+        assert_eq!(square_str_to_idx(&['g', '1']), 6);
+        assert_eq!(square_str_to_idx(&['h', '1']), 7);
 
-        assert!(square_str_to_idx(&['c', '1']) == 2 + 8 * 0);
-        assert!(square_str_to_idx(&['c', '2']) == 2 + 8 * 1);
-        assert!(square_str_to_idx(&['c', '3']) == 2 + 8 * 2);
-        assert!(square_str_to_idx(&['c', '4']) == 2 + 8 * 3);
-        assert!(square_str_to_idx(&['c', '5']) == 2 + 8 * 4);
-        assert!(square_str_to_idx(&['c', '6']) == 2 + 8 * 5);
-        assert!(square_str_to_idx(&['c', '7']) == 2 + 8 * 6);
-        assert!(square_str_to_idx(&['c', '8']) == 2 + 8 * 7);
+        assert_eq!(square_str_to_idx(&['c', '1']), 2 + 8 * 0);
+        assert_eq!(square_str_to_idx(&['c', '2']), 2 + 8 * 1);
+        assert_eq!(square_str_to_idx(&['c', '3']), 2 + 8 * 2);
+        assert_eq!(square_str_to_idx(&['c', '4']), 2 + 8 * 3);
+        assert_eq!(square_str_to_idx(&['c', '5']), 2 + 8 * 4);
+        assert_eq!(square_str_to_idx(&['c', '6']), 2 + 8 * 5);
+        assert_eq!(square_str_to_idx(&['c', '7']), 2 + 8 * 6);
+        assert_eq!(square_str_to_idx(&['c', '8']), 2 + 8 * 7);
 
-        assert!(square_str_to_idx(&['h', '8']) == 63);
+        assert_eq!(square_str_to_idx(&['h', '8']), 63);
     }
 
     #[test]
     fn idx_from_to_test() {
         for idx in 0..BOARD_SIZE {
-            assert!(square_str_to_idx(&idx_to_square_str(idx as u8)) == idx as u8);
+            assert_eq!(square_str_to_idx(&idx_to_square_str(idx as u8)), idx as u8);
         }
         for rank in '1'..='8' {
             for file in 'a'..='h' {
-                assert!(idx_to_square_str(square_str_to_idx(&[file, rank])) == [file, rank]);
+                assert_eq!(
+                    idx_to_square_str(square_str_to_idx(&[file, rank])),
+                    [file, rank]
+                );
             }
         }
     }
@@ -840,65 +843,65 @@ mod internal_tests {
     fn king_attack_test() {
         let b = Board::from_fen("8/8/8/8/8/8/8/8 w KQkq - 0 1").unwrap();
 
-        assert!(
-            b.king_attack(0)
-                == 0b_00000000_00000000_00000000_00000000_00000000_00000000_00000011_00000010
+        assert_eq!(
+            b.king_attack(0),
+            0b_00000000_00000000_00000000_00000000_00000000_00000000_00000011_00000010
         );
-        assert!(
-            b.king_attack(8)
-                == 0b_00000000_00000000_00000000_00000000_00000000_00000011_00000010_00000011
+        assert_eq!(
+            b.king_attack(8),
+            0b_00000000_00000000_00000000_00000000_00000000_00000011_00000010_00000011
         );
-        assert!(
-            b.king_attack(8 + 3)
-                == 0b_00000000_00000000_00000000_00000000_00000000_00011100_00010100_00011100
+        assert_eq!(
+            b.king_attack(8 + 3),
+            0b_00000000_00000000_00000000_00000000_00000000_00011100_00010100_00011100
         );
 
         for i in 0..64 {
-            assert!(b.king_attack(i) == KING_ATTACK_MASKS[i as usize]);
+            assert_eq!(b.king_attack(i), KING_ATTACK_MASKS[i as usize]);
         }
     }
 
     #[test]
     fn hori_vert_attack_test() {
         let b = Board::from_fen("8/8/8/8/8/8/8/8 w KQkq - 0 1").unwrap();
-        assert!(
-            b.hori_vert_attack(0)
-                == 0b_00000001_00000001_00000001_00000001_00000001_00000001_00000001_11111110
+        assert_eq!(
+            b.hori_vert_attack(0),
+            0b_00000001_00000001_00000001_00000001_00000001_00000001_00000001_11111110
         );
 
         let b = Board::from_fen("8/pppppppp/8/8/8/8/8/8 w KQkq - 0 1").unwrap();
-        assert!(
-            b.hori_vert_attack(0)
-                == 0b_00000000_00000001_00000001_00000001_00000001_00000001_00000001_11111110
+        assert_eq!(
+            b.hori_vert_attack(0),
+            0b_00000000_00000001_00000001_00000001_00000001_00000001_00000001_11111110
         );
     }
 
     #[test]
     fn diag_attack_test() {
         let b = Board::from_fen("8/8/8/8/8/8/8/8 w KQkq - 0 1").unwrap();
-        assert!(
-            b.diag_attack(0)
-                == 0b_10000000_01000000_00100000_00010000_00001000_00000100_00000010_00000000
+        assert_eq!(
+            b.diag_attack(0),
+            0b_10000000_01000000_00100000_00010000_00001000_00000100_00000010_00000000
         );
 
         let b = Board::from_fen("8/pppppppp/8/8/8/8/PPPPPPPP/8 w KQkq - 0 1").unwrap();
-        assert!(
-            b.diag_attack(8 * 2 + 4)
-                == 0b_00000000_00000001_10000010_01000100_00101000_00000000_00101000_00000000
+        assert_eq!(
+            b.diag_attack(8 * 2 + 4),
+            0b_00000000_00000001_10000010_01000100_00101000_00000000_00101000_00000000
         );
     }
 
     #[test]
     fn pawn_attack_test() {
         let b = Board::from_fen("8/pppppppp/8/8/8/8/PPPPPPPP/8 w KQkq - 0 1").unwrap();
-        assert!(
-            b.pawn_attack(8)
-                == 0b_00000000_00000000_00000000_00000000_00000000_00000010_00000000_00000000
+        assert_eq!(
+            b.pawn_attack(8),
+            0b_00000000_00000000_00000000_00000000_00000000_00000010_00000000_00000000
         );
 
-        assert!(
-            b.pawn_attack(9)
-                == 0b_00000000_00000000_00000000_00000000_00000000_00000101_00000000_00000000
+        assert_eq!(
+            b.pawn_attack(9),
+            0b_00000000_00000000_00000000_00000000_00000000_00000101_00000000_00000000
         );
     }
 
