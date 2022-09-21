@@ -1,12 +1,12 @@
 use std::fmt::Debug;
 
-use crate::idx_to_square_str;
+use crate::{idx_to_square_str, piece::PieceType};
 
 pub struct CMove {
     // ... could fit some metadata here, maybe w/b to move? promotion?
     pub from: u8,
     pub to: u8,
-    // pub promote_to: Piece,
+    pub promote_to: PieceType,
 }
 
 impl CMove {}

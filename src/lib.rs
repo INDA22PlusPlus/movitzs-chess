@@ -383,6 +383,7 @@ impl Board {
                 let mv = CMove {
                     from: from as u8,
                     to: to as u8,
+                    promote_to: PieceType::Pawn,
                 };
 
                 let mut nb = self.clone();
