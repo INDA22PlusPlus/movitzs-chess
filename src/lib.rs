@@ -139,7 +139,7 @@ impl Board {
             return Err("len(side to move) != 1");
         }
         if !ENPS_STR_RE.is_match(fen[3]) {
-            return Err("len(side to move) != 1");
+            return Err("enpassant square is invalid"); // ok this could be a simple if statement, todo remove regex
         }
 
         const INIT: Option<Piece> = None; // https://github.com/rust-lang/rust/issues/44796
@@ -361,10 +361,14 @@ impl Board {
                 continue;
             }
 
-            let attack_mask = self.get_attacks_for_piece(from as u8);
+            let mut move_mask = self.get_attacks_for_piece(from as u8);
+
+            if piece.get_type() == PieceType::Pawn {
+                move_mask ^= self.pawn_moves(from as u8);
+            }
 
             for to in 0..64 {
-                if attack_mask & 1 << to == 0 {
+                if move_mask & 1 << to == 0 {
                     // we are not attacking that square
                     continue;
                 }
@@ -401,7 +405,6 @@ impl Board {
 
     fn board_is_legal_after_move(&self) -> bool {
         // check that the one who just moved isn't in check
-        // could probably do some bitmask magic here, where the attacks in a u64 is and:ed with the king position
 
         let ac = self.get_active_color();
 
@@ -433,6 +436,7 @@ impl Board {
             }
 
             if (self.get_attacks_for_piece(i as u8) & 1 << king_square) != 0 {
+                // own king is attacked, move invalid
                 return false;
             }
         }
@@ -441,6 +445,7 @@ impl Board {
     }
 
     fn get_attacks_for_piece(&self, idx: u8) -> u64 {
+        // maybe cache attack masks? they are used multiple times so it makes sense to only evaluate them once
         assert!(
             idx < BOARD_SIZE as u8,
             "idx cannot be larger than the board"
@@ -452,7 +457,7 @@ impl Board {
         };
 
         match p.get_type() {
-            PieceType::Pawn => self.pawn_attack(idx) ^ self.pawn_moves(idx),
+            PieceType::Pawn => self.pawn_attack(idx),
             PieceType::Rook => self.hori_vert_attack(idx),
             PieceType::Knight => self.knight_attack(idx),
             PieceType::Bishop => self.diag_attack(idx),
