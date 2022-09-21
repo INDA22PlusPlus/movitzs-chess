@@ -35,10 +35,9 @@ pub struct Board {
 }
 
 pub(crate) fn square_str_to_idx(square: &[char]) -> u8 {
-    match square[0] {
-        'a'..='h' => true,
-        _ => panic!("square file not a-h"),
-    };
+    if !('a'..='h').contains(&square[0]) {
+        panic!("square file not a-h");
+    }
     let file: u8 = (square[0] as u8) - b'a';
 
     let rank: u8 = (square[1] as u8) - b'1';
