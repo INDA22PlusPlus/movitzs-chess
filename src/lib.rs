@@ -86,7 +86,6 @@ const KING_ATTACK_MASKS: [u64; 64] = [
 ];
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct Board {
     active_color_and_castle_avaliability: u8, // hot path
 
@@ -104,9 +103,9 @@ pub(crate) fn square_str_to_idx(square: &[char]) -> u8 {
         'a'..='h' => true,
         _ => panic!("square file not a-h"),
     };
-    let file: u8 = (square[0] as u8) - 'a' as u8;
+    let file: u8 = (square[0] as u8) - b'a';
 
-    let rank: u8 = (square[1] as u8) - '1' as u8;
+    let rank: u8 = (square[1] as u8) - b'1';
     assert!(rank < 8, "square rank not 1-8");
 
     rank * (RANK_SIZE as u8) + file
@@ -117,8 +116,8 @@ pub(crate) fn idx_to_square_str(idx: u8) -> [char; 2] {
         idx < BOARD_SIZE as u8,
         "index cannot be more than the board size"
     );
-    let file = ('a' as u8 + idx % 8) as char;
-    let rank = ('1' as u8 + idx / 8) as char;
+    let file = (b'a' + idx % 8) as char;
+    let rank = (b'1' + idx / 8) as char;
     [file, rank]
 }
 
@@ -192,7 +191,7 @@ impl Board {
             return Err("unknown character in piece placement string");
         }
 
-        let mut ac_a_ca = match fen[1].chars().nth(0).unwrap() {
+        let mut ac_a_ca = match fen[1].chars().next().unwrap() {
             'w' => WHITE_TO_MOVE_MASK,
             'b' => 0,
             _ => return Err("next to move invalid"),
@@ -336,11 +335,7 @@ impl Board {
         fen.push(' ');
         fen.push_str(self.full_moves.to_string().as_str());
 
-        return fen;
-    }
-
-    fn get_piece_at(&self, sqr: &[char]) -> Option<&Piece> {
-        self.pieces[square_str_to_idx(sqr) as usize].as_ref()
+        fen
     }
 
     pub fn get_active_color(&self) -> PieceColor {
@@ -356,7 +351,7 @@ impl Board {
 
         let ac = self.get_active_color();
 
-        for (from, piece) in (&self.pieces).into_iter().enumerate() {
+        for (from, piece) in self.pieces.iter().enumerate() {
             if piece.is_none() {
                 continue;
             }
@@ -457,24 +452,13 @@ impl Board {
         };
 
         match p.get_type() {
-            PieceType::Pawn => self.pawn_attack(idx),
+            PieceType::Pawn => self.pawn_attack(idx) ^ self.pawn_moves(idx),
             PieceType::Rook => self.hori_vert_attack(idx),
             PieceType::Knight => self.knight_attack(idx),
             PieceType::Bishop => self.diag_attack(idx),
             PieceType::Queen => self.hori_vert_attack(idx) ^ self.diag_attack(idx),
             PieceType::King => KING_ATTACK_MASKS[idx as usize],
         }
-    }
-
-    fn get_legal_moves_for_piece(&self, idx: u8) -> Vec<CMove> {
-        let piece = match &self.pieces[idx as usize] {
-            Some(p) => p,
-            None => return Vec::new(),
-        };
-
-        let [file, rank] = idx_to_square_str(idx);
-
-        Vec::new()
     }
 
     fn pawn_moves(&self, idx: u8) -> u64 {
@@ -496,13 +480,13 @@ impl Board {
             return 0;
         }
 
-        let mut result = 1 << idx + dir;
+        let mut result = 1 << (idx + dir);
 
         if ((color == PieceColor::Black && rank == '7')
             || (color == PieceColor::White && rank == '2'))
             && self.pieces[(idx + dir * 2) as usize].is_none()
         {
-            result ^= 1 << idx + dir * 2;
+            result ^= 1 << (idx + dir * 2);
         }
 
         result
@@ -548,7 +532,7 @@ impl Board {
                     file = ((file as i8) + f_dir) as u8 as char;
                     rank = ((rank as i8) + r_dir) as u8 as char;
 
-                    if file < 'a' || file > 'h' || rank < '1' || rank > '8' {
+                    if !('a'..='h').contains(&file) || !('1'..='8').contains(&rank) {
                         break;
                     }
 
@@ -566,7 +550,7 @@ impl Board {
         result
     }
 
-    // kept for informational purposes, now we use constants instead
+    // kept for informational and testing purposes, now we use constants instead
     #[allow(dead_code)]
     fn king_attack(&self, idx: u8) -> u64 {
         let mut result = 0;
@@ -574,36 +558,36 @@ impl Board {
 
         if rank > '1' {
             // attack down
-            result ^= 1 << idx - 8;
+            result ^= 1 << (idx - 8);
         }
         if rank < '8' {
             // attack up
-            result ^= 1 << idx + 8;
+            result ^= 1 << (idx + 8);
         }
         if file != 'a' {
             // attack left
-            result ^= 1 << idx - 1;
+            result ^= 1 << (idx - 1);
         }
         if file != 'h' {
             // attack right
-            result ^= 1 << idx + 1;
+            result ^= 1 << (idx + 1);
         }
 
         if rank != '1' && file != 'a' {
             // attack down left
-            result ^= 1 << idx - 8 - 1;
+            result ^= 1 << (idx - 8 - 1);
         }
         if rank != '8' && file != 'a' {
             // attack up left
-            result ^= 1 << idx + 8 - 1;
+            result ^= 1 << (idx + 8 - 1);
         }
         if rank != '1' && file != 'h' {
             // attack down right
-            result ^= 1 << idx - 8 + 1;
+            result ^= 1 << (idx - 8 + 1);
         }
         if rank != '8' && file != 'h' {
             // attack up right
-            result ^= 1 << idx + 8 + 1;
+            result ^= 1 << (idx + 8 + 1);
         }
 
         result
@@ -617,38 +601,38 @@ impl Board {
         let mut result = 0;
         if file != 'a' && rank < '7' {
             // attack up left
-            result ^= 1 << idx + 16 - 1;
+            result ^= 1 << (idx + 16 - 1);
         }
         if file > 'b' && rank != '8' {
             // attack left up
-            result ^= 1 << idx + 8 - 2;
+            result ^= 1 << (idx + 8 - 2);
         }
 
         if file != 'h' && rank < '7' {
             // attack up right
-            result ^= 1 << idx + 16 + 1;
+            result ^= 1 << (idx + 16 + 1);
         }
         if file < 'h' && rank != '8' {
             // attack right up
-            result ^= 1 << idx + 8 + 2;
+            result ^= 1 << (idx + 8 + 2);
         }
 
         if file != 'a' && rank > '2' {
             // attack down left
-            result ^= 1 << idx - 16 - 1;
+            result ^= 1 << (idx - 16 - 1);
         }
         if file > 'b' && rank != '1' {
             // attack left down
-            result ^= 1 << idx - 8 - 2;
+            result ^= 1 << (idx - 8 - 2);
         }
 
         if file != 'h' && rank > '2' {
             // attack down right
-            result ^= 1 << idx - 16 + 1;
+            result ^= 1 << (idx - 16 + 1);
         }
         if file < 'g' && rank != '1' {
             // attack right down
-            result ^= 1 << idx - 8 + 2;
+            result ^= 1 << (idx - 8 + 2);
         }
 
         result
@@ -708,7 +692,10 @@ impl Board {
 
 #[cfg(test)]
 mod lib_tests {
-    use crate::piece::{PieceColor, PieceType};
+    use crate::{
+        piece::{PieceColor, PieceType},
+        square_str_to_idx,
+    };
 
     use super::Board;
 
@@ -746,7 +733,7 @@ mod lib_tests {
 
         for file in 'a'..='h' {
             for rank in '1'..='8' {
-                let p = b.get_piece_at(&[file, rank]);
+                let p = b.pieces[square_str_to_idx(&[file, rank]) as usize];
 
                 if rank > '2' && rank < '7' {
                     assert!(p.is_none());
@@ -801,6 +788,7 @@ mod lib_tests {
 }
 
 #[cfg(test)]
+#[allow(clippy::all)]
 mod internal_tests {
     use crate::KING_ATTACK_MASKS;
 
@@ -913,8 +901,6 @@ mod internal_tests {
     fn get_legal_moves_test() {
         let b = Board::from_fen(STARTING_FEN).unwrap();
 
-        for i in b.get_legal_moves() {
-            // println!("{:?}", i);
-        }
+        b.get_legal_moves();
     }
 }

@@ -1,7 +1,7 @@
 use std::fmt;
 
 #[repr(u8)]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum PieceType {
     Pawn = 0,
     Rook,
@@ -12,7 +12,7 @@ pub enum PieceType {
 }
 
 #[repr(u8)]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum PieceColor {
     White = 0,
     Black,
