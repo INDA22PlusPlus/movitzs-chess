@@ -157,49 +157,6 @@ impl Board {
         result
     }
 
-    // kept for informational and testing purposes, now we use constants instead
-    #[allow(dead_code)]
-    pub(crate) fn king_attack(idx: u8) -> u64 {
-        let mut result = 0;
-        let [file, rank] = idx_to_square_str(idx);
-
-        if rank > '1' {
-            // attack down
-            result |= 1 << (idx - 8);
-        }
-        if rank < '8' {
-            // attack up
-            result |= 1 << (idx + 8);
-        }
-        if file != 'a' {
-            // attack left
-            result |= 1 << (idx - 1);
-        }
-        if file != 'h' {
-            // attack right
-            result |= 1 << (idx + 1);
-        }
-
-        if rank != '1' && file != 'a' {
-            // attack down left
-            result |= 1 << (idx - 8 - 1);
-        }
-        if rank != '8' && file != 'a' {
-            // attack up left
-            result |= 1 << (idx + 8 - 1);
-        }
-        if rank != '1' && file != 'h' {
-            // attack down right
-            result |= 1 << (idx - 8 + 1);
-        }
-        if rank != '8' && file != 'h' {
-            // attack up right
-            result |= 1 << (idx + 8 + 1);
-        }
-
-        result
-    }
-
     pub(crate) fn knight_attack(&self, idx: u8) -> u64 {
         let [file, rank] = idx_to_square_str(idx);
 
@@ -300,26 +257,67 @@ impl Board {
 #[allow(clippy::all)]
 #[cfg(test)]
 mod move_tests {
-    use crate::{moves::KING_ATTACK_MASKS, Board};
+    use crate::{idx_to_square_str, moves::KING_ATTACK_MASKS, Board};
 
     #[test]
     fn king_attack_test() {
         assert_eq!(
-            Board::king_attack(0),
+            king_attack(0),
             0b_00000000_00000000_00000000_00000000_00000000_00000000_00000011_00000010
         );
         assert_eq!(
-            Board::king_attack(8),
+            king_attack(8),
             0b_00000000_00000000_00000000_00000000_00000000_00000011_00000010_00000011
         );
         assert_eq!(
-            Board::king_attack(8 + 3),
+            king_attack(8 + 3),
             0b_00000000_00000000_00000000_00000000_00000000_00011100_00010100_00011100
         );
 
         for i in 0..64 {
-            assert_eq!(Board::king_attack(i), KING_ATTACK_MASKS[i as usize]);
+            assert_eq!(king_attack(i), KING_ATTACK_MASKS[i as usize]);
         }
+    }
+    // used when evaluating KING_ATTACK_MASKS
+    fn king_attack(idx: u8) -> u64 {
+        let mut result = 0;
+        let [file, rank] = idx_to_square_str(idx);
+
+        if rank > '1' {
+            // attack down
+            result |= 1 << (idx - 8);
+        }
+        if rank < '8' {
+            // attack up
+            result |= 1 << (idx + 8);
+        }
+        if file != 'a' {
+            // attack left
+            result |= 1 << (idx - 1);
+        }
+        if file != 'h' {
+            // attack right
+            result |= 1 << (idx + 1);
+        }
+
+        if rank != '1' && file != 'a' {
+            // attack down left
+            result |= 1 << (idx - 8 - 1);
+        }
+        if rank != '8' && file != 'a' {
+            // attack up left
+            result |= 1 << (idx + 8 - 1);
+        }
+        if rank != '1' && file != 'h' {
+            // attack down right
+            result |= 1 << (idx - 8 + 1);
+        }
+        if rank != '8' && file != 'h' {
+            // attack up right
+            result |= 1 << (idx + 8 + 1);
+        }
+
+        result
     }
 
     #[test]
