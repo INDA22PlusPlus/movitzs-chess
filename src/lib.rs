@@ -477,6 +477,37 @@ impl Board {
         Vec::new()
     }
 
+    fn pawn_moves(&self, idx: u8) -> u64 {
+        let [_, rank] = idx_to_square_str(idx);
+
+        let color = self.pieces[idx as usize].unwrap().get_color();
+
+        let idx = idx as i8;
+
+        if (color == PieceColor::Black && rank == '1')
+            || (color == PieceColor::White && rank == '8')
+        {
+            return 0;
+        }
+
+        let dir: i8 = if color == PieceColor::White { 8 } else { -8 };
+
+        if self.pieces[(idx + dir) as usize].is_some() {
+            return 0;
+        }
+
+        let mut result = 1 << idx + dir;
+
+        if ((color == PieceColor::Black && rank == '7')
+            || (color == PieceColor::White && rank == '2'))
+            && self.pieces[(idx + dir * 2) as usize].is_none()
+        {
+            result ^= 1 << idx + dir * 2;
+        }
+
+        result
+    }
+
     fn pawn_attack(&self, idx: u8) -> u64 {
         let mut result = 0;
         let [file, _] = idx_to_square_str(idx);
