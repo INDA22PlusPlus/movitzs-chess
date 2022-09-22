@@ -1,8 +1,8 @@
 #![feature(let_chains)]
-mod cmove;
-mod fen;
-mod moves;
-mod piece;
+pub mod cmove;
+pub mod fen;
+pub mod moves;
+pub mod piece;
 
 use moves::KING_ATTACK_MASKS;
 
@@ -112,6 +112,49 @@ impl Board {
         true
     }
 
+    pub fn get_legal_moves_for_idx(&self, from: u8, moves: &mut Vec<CMove>) {
+        let mut move_mask = self.get_attacks_for_piece(from as u8);
+        let piece = match self.pieces[from as usize] {
+            Some(p) => p,
+            None => return,
+        };
+
+        if piece.get_type() == PieceType::Pawn {
+            move_mask |= self.pawn_moves(from as u8);
+        }
+
+        for to in 0..64 {
+            if move_mask & 1 << to == 0 {
+                // we are not attacking that square
+                continue;
+            }
+
+            if !(self.pieces[to].is_none()
+                || self.pieces[to].as_ref().unwrap().get_color() != self.get_active_color())
+            {
+                // square is own piece
+                continue;
+            }
+            if self.pieces[to].is_some()
+                && self.pieces[to].as_ref().unwrap().get_type() == PieceType::King
+            {
+                // should not happen with a valid board, but just don't capture the king pls
+                // this is here for fuzzing to work, but remove this when proper checks are in place
+                continue;
+            }
+
+            let mv = CMove {
+                from: from as u8,
+                to: to as u8,
+                promote_to: PieceType::Queen,
+            };
+
+            if self.clone().apply_move(&mv).is_ok() {
+                moves.push(mv);
+            }
+        }
+    }
+
     pub fn get_legal_moves(&self) -> Vec<CMove> {
         let mut moves = Vec::with_capacity(100);
 
@@ -123,51 +166,24 @@ impl Board {
             .enumerate()
             .filter(|(_, p)| p.is_some() && p.unwrap().get_color() == ac);
 
-        for (from, piece) in active_pieces {
-            let piece = piece.as_ref().unwrap();
-
-            let mut move_mask = self.get_attacks_for_piece(from as u8);
-
-            if piece.get_type() == PieceType::Pawn {
-                move_mask |= self.pawn_moves(from as u8);
-            }
-
-            for to in 0..64 {
-                if move_mask & 1 << to == 0 {
-                    // we are not attacking that square
-                    continue;
-                }
-
-                if !(self.pieces[to].is_none()
-                    || self.pieces[to].as_ref().unwrap().get_color() != ac)
-                {
-                    // square is own piece
-                    continue;
-                }
-                if self.pieces[to].is_some()
-                    && self.pieces[to].as_ref().unwrap().get_type() == PieceType::King
-                {
-                    // should not happen with a valid board, but just don't capture the king pls
-                    // this is here for fuzzing to work, but remove this when proper checks are in place
-                    continue;
-                }
-
-                let mv = CMove {
-                    from: from as u8,
-                    to: to as u8,
-                    promote_to: PieceType::Pawn,
-                };
-
-                if self.clone().apply_move(&mv).is_ok() {
-                    moves.push(mv);
-                }
-            }
+        for (from, _) in active_pieces {
+            self.get_legal_moves_for_idx(from as u8, &mut moves);
         }
 
         moves
     }
 
     pub fn make_move(&mut self, mv: &CMove) -> Result<(), &'static str> {
+        if self.state != BoardState::InProgress {
+            return Err("game ended");
+        }
+
+        let mut moves: Vec<CMove> = Vec::with_capacity(10);
+        self.get_legal_moves_for_idx(mv.from, &mut moves);
+        if !moves.iter().any(|x| x.to == mv.to) {
+            return Err("not legal move");
+        }
+
         self.apply_move(mv)?;
 
         if self.get_legal_moves().is_empty() {
@@ -497,8 +513,8 @@ mod internal_tests {
         let mut b = Board::from_fen("8/7P/1k6/8/8/3K4/8/8 w - - 0 1").unwrap();
 
         b.make_move(&CMove {
-            from: 55,
-            to: 55 + 8,
+            from: 63 - 8,
+            to: 63,
             promote_to: PieceType::Queen,
         })
         .unwrap();
@@ -535,7 +551,7 @@ mod internal_tests {
 
         b.make_move(&CMove {
             from: 46,
-            to: 62,
+            to: 46 + 8,
             promote_to: PieceType::Pawn,
         })
         .unwrap();
