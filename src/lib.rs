@@ -528,4 +528,18 @@ mod internal_tests {
 
         assert_eq!(b.state, BoardState::Stalemate);
     }
+
+    #[test]
+    fn checkmate() {
+        let mut b = Board::from_fen("7k/5K2/6Q1/8/8/8/8/8 w - - 0 1").unwrap();
+
+        b.make_move(&CMove {
+            from: 46,
+            to: 62,
+            promote_to: PieceType::Pawn,
+        })
+        .unwrap();
+
+        assert_eq!(b.state, BoardState::Checkmate);
+    }
 }
