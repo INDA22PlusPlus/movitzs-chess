@@ -30,8 +30,16 @@ pub struct Board {
     full_moves: u16,
     half_moves: u8,
     en_passant_square: u8, // u8::MAX when none, does not indicate that en passant is possible (per first fen spec)
+    state: BoardState,
 
     pieces: [Option<Piece>; BOARD_SIZE], // idx 0 => A1, idx 1 => A2, ... , idx 63 => H8
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum BoardState {
+    InProgress,
+    Checkmate,
+    Stalemate,
 }
 
 pub(crate) fn square_str_to_idx(square: &[char]) -> u8 {
@@ -75,14 +83,16 @@ impl Board {
         }
     }
 
-    pub fn valid_kings(&self) -> bool {
-        let kings: Vec<(usize, Piece)> = self
-            .pieces
+    fn get_pieces(&self, t: PieceType) -> impl Iterator<Item = (usize, Piece)> + '_ {
+        self.pieces
             .iter()
             .enumerate()
-            .filter(|(_, p)| p.is_some() && p.unwrap().get_type() == PieceType::King)
+            .filter(move |(_, p)| p.is_some() && p.unwrap().get_type() == t)
             .map(|(i, p)| (i, p.unwrap()))
-            .collect();
+    }
+
+    pub fn valid_kings(&self) -> bool {
+        let kings: Vec<(usize, Piece)> = self.get_pieces(PieceType::King).collect();
 
         if kings.len() != 2 {
             return false;
@@ -107,15 +117,14 @@ impl Board {
 
         let ac = self.get_active_color();
 
-        for (from, piece) in self.pieces.iter().enumerate() {
-            if piece.is_none() {
-                continue;
-            }
-            let piece = piece.as_ref().unwrap();
+        let active_pieces = self
+            .pieces
+            .iter()
+            .enumerate()
+            .filter(|(_, p)| p.is_some() && p.unwrap().get_color() == ac);
 
-            if ac != piece.get_color() {
-                continue;
-            }
+        for (from, piece) in active_pieces {
+            let piece = piece.as_ref().unwrap();
 
             let mut move_mask = self.get_attacks_for_piece(from as u8);
 
@@ -149,8 +158,7 @@ impl Board {
                     promote_to: PieceType::Pawn,
                 };
 
-                let mut nb = self.clone();
-                if nb.apply_move(&mv).is_ok() {
+                if self.clone().apply_move(&mv).is_ok() {
                     moves.push(mv);
                 }
             }
@@ -178,17 +186,29 @@ impl Board {
             return Err("from color is not active");
         }
 
-        if ac == PieceColor::Black {
-            self.full_moves += 1;
-        }
-
-        self.active_color_and_castle_avaliability ^= WHITE_TO_MOVE_MASK;
+        let old_pieces = self.pieces;
 
         self.pieces[mv.to as usize] = from_piece;
         self.pieces[mv.from as usize] = None;
 
-        if from_piece.unwrap().get_type() == PieceType::King {
-            let mask = if ac == PieceColor::White {
+        if self.king_is_checked(ac) {
+            self.pieces = old_pieces; // rollback
+            return Err("your king is in check");
+        }
+
+        if self.get_active_color() == PieceColor::Black {
+            self.full_moves += 1;
+        }
+
+        self.taint_castling_avaliability(mv, from_piece.unwrap());
+        self.active_color_and_castle_avaliability ^= WHITE_TO_MOVE_MASK;
+
+        Ok(())
+    }
+
+    fn taint_castling_avaliability(&mut self, mv: &CMove, from_piece: Piece) {
+        if from_piece.get_type() == PieceType::King {
+            let mask = if self.get_active_color() == PieceColor::White {
                 WHITE_KING_CASTLE_MASK | WHITE_QUEEN_CASTLE_MASK
             } else {
                 BLACK_KING_CASTLE_MASK | BLACK_QUEEN_CASTLE_MASK
@@ -196,7 +216,7 @@ impl Board {
             self.active_color_and_castle_avaliability &= !mask;
         }
 
-        if from_piece.unwrap().get_type() == PieceType::Rook {
+        if from_piece.get_type() == PieceType::Rook {
             match mv.from {
                 0 => {
                     self.active_color_and_castle_avaliability &= !WHITE_QUEEN_CASTLE_MASK;
@@ -213,28 +233,13 @@ impl Board {
                 _ => {}
             }
         }
-
-        if self.active_king_is_checked() {
-            return Err("your king is in check bruv");
-        }
-
-        Ok(())
     }
 
-    fn active_king_is_checked(&self) -> bool {
-        // check that the one who just moved isn't in check
-
-        let ac = self.get_active_color();
-
-        // @castor, okok, bitmaps would be nicer
+    fn king_is_checked(&self, ac: PieceColor) -> bool {
         let king_square = self
-            .pieces
-            .iter()
-            .enumerate()
-            .filter(|(_, p)| p.is_some())
-            .map(|(i, p)| (i, p.unwrap()))
-            .find(|(_, p)| p.get_type() == PieceType::King && p.get_color() == ac)
-            .expect("could not find king")
+            .get_pieces(PieceType::King)
+            .find(|k| k.1.get_color() == ac)
+            .expect("where knug")
             .0;
 
         self.pieces
@@ -392,6 +397,8 @@ mod lib_tests {
 #[allow(clippy::all)]
 mod internal_tests {
 
+    use crate::{cmove::CMove, piece::PieceType};
+
     use super::{idx_to_square_str, square_str_to_idx, Board, BOARD_SIZE};
 
     const STARTING_FEN: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
@@ -439,5 +446,19 @@ mod internal_tests {
         let b = Board::from_fen(STARTING_FEN).unwrap();
 
         b.get_legal_moves();
+    }
+
+    #[test]
+    fn move_while_checked() {
+        let fen = "rnb1kbnr/pppp1ppp/8/4p3/4PP1q/8/PPPP2PP/RNBQKBNR w KQkq - 1 3";
+        let mut b = Board::from_fen(fen).unwrap();
+        b.apply_move(&CMove {
+            from: 6,
+            to: 5 + 16,
+            promote_to: PieceType::Pawn,
+        })
+        .expect_err("is in check, should not be able to move knight");
+
+        assert_eq!(b.to_fen(), fen, "invalid move must not modify board");
     }
 }

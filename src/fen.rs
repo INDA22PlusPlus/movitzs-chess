@@ -1,8 +1,8 @@
 use crate::{
     idx_to_square_str,
     piece::{Piece, PieceColor, PieceType},
-    square_str_to_idx, Board, BLACK_KING_CASTLE_MASK, BLACK_QUEEN_CASTLE_MASK, BOARD_SIZE,
-    WHITE_KING_CASTLE_MASK, WHITE_QUEEN_CASTLE_MASK, WHITE_TO_MOVE_MASK,
+    square_str_to_idx, Board, BoardState, BLACK_KING_CASTLE_MASK, BLACK_QUEEN_CASTLE_MASK,
+    BOARD_SIZE, WHITE_KING_CASTLE_MASK, WHITE_QUEEN_CASTLE_MASK, WHITE_TO_MOVE_MASK,
 };
 
 use lazy_static::lazy_static;
@@ -129,6 +129,7 @@ impl Board {
             full_moves,
             half_moves,
             en_passant_square,
+            state: BoardState::InProgress,
         };
 
         if !b.valid_kings() {
