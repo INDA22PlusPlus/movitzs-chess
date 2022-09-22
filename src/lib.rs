@@ -176,19 +176,36 @@ impl Board {
         if from_piece.is_none() {
             return Err("from square is empty");
         }
+        let from_piece = from_piece.unwrap();
 
-        if to_piece.is_some() && to_piece.unwrap().get_color() == from_piece.unwrap().get_color() {
+        if to_piece.is_some() && to_piece.unwrap().get_color() == from_piece.get_color() {
             return Err("can not capture own piece");
         }
 
         let ac = self.get_active_color();
-        if from_piece.unwrap().get_color() != ac {
+        if from_piece.get_color() != ac {
             return Err("from color is not active");
         }
 
         let old_pieces = self.pieces;
 
-        self.pieces[mv.to as usize] = from_piece;
+        let mut new_piece = from_piece;
+
+        // promotion
+        if from_piece.get_type() == PieceType::Pawn {
+            let fc = from_piece.get_color();
+
+            if (fc == PieceColor::White && mv.to / 8 == 7)
+                || (fc == PieceColor::Black && mv.to / 8 == 0)
+            {
+                if mv.promote_to == PieceType::Pawn {
+                    return Err("can not promote to pawn");
+                }
+                new_piece = Piece::new(mv.promote_to, fc);
+            }
+        }
+
+        self.pieces[mv.to as usize] = Some(new_piece);
         self.pieces[mv.from as usize] = None;
 
         if self.king_is_checked(ac) {
@@ -200,7 +217,7 @@ impl Board {
             self.full_moves += 1;
         }
 
-        self.taint_castling_avaliability(mv, from_piece.unwrap());
+        self.taint_castling_avaliability(mv, from_piece);
         self.active_color_and_castle_avaliability ^= WHITE_TO_MOVE_MASK;
 
         Ok(())
@@ -460,5 +477,19 @@ mod internal_tests {
         .expect_err("is in check, should not be able to move knight");
 
         assert_eq!(b.to_fen(), fen, "invalid move must not modify board");
+    }
+
+    #[test]
+    fn promotion() {
+        let mut b = Board::from_fen("8/7P/1k6/8/8/3K4/8/8 w - - 0 1").unwrap();
+
+        b.apply_move(&CMove {
+            from: 55,
+            to: 55 + 8,
+            promote_to: PieceType::Queen,
+        })
+        .unwrap();
+
+        assert_eq!("7Q/8/1k6/8/8/3K4/8/8 b - - 0 1", b.to_fen());
     }
 }
