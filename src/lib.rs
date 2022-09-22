@@ -182,7 +182,7 @@ impl Board {
     }
 
     fn apply_move(&mut self, mv: &CMove) -> Result<(), &'static str> {
-        // todo: implement en passant, castling, promotion
+        // todo: implement en passant, castling
 
         let from_piece = self.pieces[mv.from as usize];
         let to_piece = self.pieces[mv.to as usize];

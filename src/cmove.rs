@@ -16,6 +16,7 @@ impl Debug for CMove {
         f.debug_struct("CMove")
             .field("from", &idx_to_square_str(self.from))
             .field("to", &idx_to_square_str(self.to))
+            .field("promote_to", &self.promote_to)
             .finish()
     }
 }
