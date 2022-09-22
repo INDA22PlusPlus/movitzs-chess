@@ -35,7 +35,7 @@ pub struct Board {
     pieces: [Option<Piece>; BOARD_SIZE], // idx 0 => A1, idx 1 => A2, ... , idx 63 => H8
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BoardState {
     InProgress,
     Checkmate,
@@ -167,6 +167,20 @@ impl Board {
         moves
     }
 
+    pub fn make_move(&mut self, mv: &CMove) -> Result<(), &'static str> {
+        self.apply_move(mv)?;
+
+        if self.get_legal_moves().is_empty() {
+            if self.king_is_checked(self.get_active_color()) {
+                self.state = BoardState::Checkmate;
+            } else {
+                self.state = BoardState::Stalemate;
+            }
+        }
+
+        Ok(())
+    }
+
     fn apply_move(&mut self, mv: &CMove) -> Result<(), &'static str> {
         // todo: implement en passant, castling, promotion
 
@@ -182,8 +196,7 @@ impl Board {
             return Err("can not capture own piece");
         }
 
-        let ac = self.get_active_color();
-        if from_piece.get_color() != ac {
+        if from_piece.get_color() != self.get_active_color() {
             return Err("from color is not active");
         }
 
@@ -208,7 +221,7 @@ impl Board {
         self.pieces[mv.to as usize] = Some(new_piece);
         self.pieces[mv.from as usize] = None;
 
-        if self.king_is_checked(ac) {
+        if self.king_is_checked(self.get_active_color()) {
             self.pieces = old_pieces; // rollback
             return Err("your king is in check");
         }
@@ -372,7 +385,7 @@ mod lib_tests {
     fn make_moves() {
         let mut b = Board::default();
 
-        b.apply_move(&CMove {
+        b.make_move(&CMove {
             from: 12,
             to: 20,
             promote_to: PieceType::Pawn,
@@ -384,7 +397,7 @@ mod lib_tests {
             "rnbqkbnr/pppppppp/8/8/8/4P3/PPPP1PPP/RNBQKBNR b KQkq - 0 1"
         );
 
-        b.apply_move(&CMove {
+        b.make_move(&CMove {
             from: 50,
             to: 42,
             promote_to: PieceType::Pawn,
@@ -396,7 +409,7 @@ mod lib_tests {
             "rnbqkbnr/pp1ppppp/2p5/8/8/4P3/PPPP1PPP/RNBQKBNR w KQkq - 0 2"
         );
 
-        b.apply_move(&CMove {
+        b.make_move(&CMove {
             from: 4,
             to: 12,
             promote_to: PieceType::Pawn,
@@ -414,7 +427,7 @@ mod lib_tests {
 #[allow(clippy::all)]
 mod internal_tests {
 
-    use crate::{cmove::CMove, piece::PieceType};
+    use crate::{cmove::CMove, piece::PieceType, BoardState};
 
     use super::{idx_to_square_str, square_str_to_idx, Board, BOARD_SIZE};
 
@@ -469,7 +482,7 @@ mod internal_tests {
     fn move_while_checked() {
         let fen = "rnb1kbnr/pppp1ppp/8/4p3/4PP1q/8/PPPP2PP/RNBQKBNR w KQkq - 1 3";
         let mut b = Board::from_fen(fen).unwrap();
-        b.apply_move(&CMove {
+        b.make_move(&CMove {
             from: 6,
             to: 5 + 16,
             promote_to: PieceType::Pawn,
@@ -483,7 +496,7 @@ mod internal_tests {
     fn promotion() {
         let mut b = Board::from_fen("8/7P/1k6/8/8/3K4/8/8 w - - 0 1").unwrap();
 
-        b.apply_move(&CMove {
+        b.make_move(&CMove {
             from: 55,
             to: 55 + 8,
             promote_to: PieceType::Queen,
@@ -491,5 +504,28 @@ mod internal_tests {
         .unwrap();
 
         assert_eq!("7Q/8/1k6/8/8/3K4/8/8 b - - 0 1", b.to_fen());
+    }
+
+    #[test]
+    fn stalemate() {
+        let mut b = Board::from_fen("6k1/8/6Q1/8/8/3K4/8/8 b - - 0 1").unwrap();
+
+        b.make_move(&CMove {
+            from: 62,
+            to: 63,
+            promote_to: PieceType::Pawn,
+        })
+        .unwrap();
+
+        assert_eq!(b.state, BoardState::InProgress);
+
+        b.make_move(&CMove {
+            from: 19,
+            to: 20,
+            promote_to: PieceType::Pawn,
+        })
+        .unwrap();
+
+        assert_eq!(b.state, BoardState::Stalemate);
     }
 }
