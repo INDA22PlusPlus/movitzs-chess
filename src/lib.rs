@@ -643,12 +643,4 @@ mod internal_tests {
             "2kr1bnr/ppp1pppp/2nq4/3p4/3P1Bb1/2N2N1P/PPP1PPP1/R2QKB1R w KQ - 0 6"
         );
     }
-
-    #[test]
-    fn x() {
-        let to = 1;
-        let from = 4;
-        let i3 = to as i8 + (if to < from { -1_i8 } else { 1 });
-        println!("{}", i3);
-    }
 }
