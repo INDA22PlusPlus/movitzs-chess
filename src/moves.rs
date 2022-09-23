@@ -84,7 +84,7 @@ impl Board {
                 (5..=6, 6, WHITE_QUEEN_CASTLE_MASK),
             ),
             PieceColor::Black => (
-                (57..=60, 57, BLACK_KING_CASTLE_MASK),
+                (57..=59, 57, BLACK_KING_CASTLE_MASK),
                 (61..=62, 62, BLACK_QUEEN_CASTLE_MASK),
             ),
         };

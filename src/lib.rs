@@ -236,21 +236,15 @@ impl Board {
             }
         }
 
-        println!(
-            "{} {} {}",
-            mv.from,
-            mv.to,
-            (mv.from % 8).abs_diff(mv.to % 8)
-        );
         if from_piece.get_type() == PieceType::King && (mv.from % 8).abs_diff(mv.to % 8) > 1 {
             // castling
-            let i = mv.from as i8 + (if mv.to < mv.from { -2_i8 } else { 2 });
-            let i2 = mv.from as i8 + (if mv.to < mv.from { -1_i8 } else { 1 });
-            let i3 = mv.to as i8 + (if mv.to < mv.from { -2_i8 } else { 1 });
+            let new_king_sqr = mv.from as i8 + (if mv.to < mv.from { -2_i8 } else { 2 });
+            let new_rook_sqr = mv.from as i8 + (if mv.to < mv.from { -1_i8 } else { 1 });
+            let old_rook_sqr = mv.to as i8 + (if mv.to < mv.from { -1_i8 } else { 1 });
 
-            self.pieces[i as usize] = Some(from_piece);
-            self.pieces[i2 as usize] = self.pieces[i3 as usize];
-            self.pieces[i3 as usize] = None;
+            self.pieces[new_king_sqr as usize] = Some(from_piece);
+            self.pieces[new_rook_sqr as usize] = self.pieces[old_rook_sqr as usize];
+            self.pieces[old_rook_sqr as usize] = None;
             self.pieces[mv.from as usize] = None;
         } else {
             // default
@@ -582,6 +576,7 @@ mod internal_tests {
 
     #[test]
     fn castling() {
+        // white short
         let mut b =
             Board::from_fen("rnbqkbnr/ppp2ppp/3p4/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 4")
                 .unwrap();
@@ -597,5 +592,63 @@ mod internal_tests {
             b.to_fen(),
             "rnbqkbnr/ppp2ppp/3p4/4p3/2B1P3/5N2/PPPP1PPP/RNBQ1RK1 b kq - 0 4"
         );
+
+        // white long
+        let mut b =
+            Board::from_fen("rnb1kbnr/ppp2pp1/3p3p/4p1q1/3P4/2N5/PPPQPPPP/R3KBNR w KQkq - 0 5")
+                .unwrap();
+
+        b.make_move(&CMove {
+            from: 4,
+            to: 1,
+            promote_to: PieceType::Pawn,
+        })
+        .unwrap();
+
+        assert_eq!(
+            b.to_fen(),
+            "rnb1kbnr/ppp2pp1/3p3p/4p1q1/3P4/2N5/PPPQPPPP/2KR1BNR b kq - 0 5"
+        );
+
+        // black short
+        let mut b =
+            Board::from_fen("rnbqk2r/pppp1ppp/5n2/4p3/1b2PP2/2P2N2/PP1P2PP/RNBQKB1R b KQkq - 0 4")
+                .unwrap();
+        b.make_move(&CMove {
+            from: 60,
+            to: 62,
+            promote_to: PieceType::Pawn,
+        })
+        .unwrap();
+
+        assert_eq!(
+            b.to_fen(),
+            "rnbq1rk1/pppp1ppp/5n2/4p3/1b2PP2/2P2N2/PP1P2PP/RNBQKB1R w KQ - 0 5"
+        );
+
+        // black long
+        let mut b =
+            Board::from_fen("r3kbnr/ppp1pppp/2nq4/3p4/3P1Bb1/2N2N1P/PPP1PPP1/R2QKB1R b KQkq - 0 5")
+                .unwrap();
+
+        b.make_move(&CMove {
+            from: 60,
+            to: 57,
+            promote_to: PieceType::Pawn,
+        })
+        .unwrap();
+
+        assert_eq!(
+            b.to_fen(),
+            "2kr1bnr/ppp1pppp/2nq4/3p4/3P1Bb1/2N2N1P/PPP1PPP1/R2QKB1R w KQ - 0 6"
+        );
+    }
+
+    #[test]
+    fn x() {
+        let to = 1;
+        let from = 4;
+        let i3 = to as i8 + (if to < from { -1_i8 } else { 1 });
+        println!("{}", i3);
     }
 }
