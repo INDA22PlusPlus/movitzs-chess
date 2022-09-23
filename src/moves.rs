@@ -145,24 +145,29 @@ impl Board {
             .filter(|(_, p)| p.is_some() && p.unwrap().get_color() != self.get_active_color())
             .fold(0_u64, |acc, item| acc | 1 << item.0);
 
+        // 0: the range which must be empty and not attacked
+        // 1: where the castling move will be made avaliable
+        // 2: king square
+        // 3: mask
         let ranges = match k.get_color() {
             PieceColor::White => (
-                (1..=3, 1, WHITE_KING_CASTLE_MASK),
-                (5..=6, 6, WHITE_QUEEN_CASTLE_MASK),
+                (1..=3, 1, 4, WHITE_KING_CASTLE_MASK),
+                (5..=6, 6, 4, WHITE_QUEEN_CASTLE_MASK),
             ),
             PieceColor::Black => (
-                (57..=59, 57, BLACK_KING_CASTLE_MASK),
-                (61..=62, 62, BLACK_QUEEN_CASTLE_MASK),
+                (57..=59, 57, 60, BLACK_KING_CASTLE_MASK),
+                (61..=62, 62, 60, BLACK_QUEEN_CASTLE_MASK),
             ),
         };
 
         let mut result = 0;
 
         for mut range in [ranges.0, ranges.1] {
-            if self.active_color_and_castle_avaliability & range.2 != 0
+            if self.active_color_and_castle_avaliability & range.3 != 0
                 && range
                     .0
                     .all(|i| self.pieces[i].is_none() && ops_attacks & 1 << i == 0)
+                && idx == range.2
             {
                 result |= 1 << range.1;
             }
