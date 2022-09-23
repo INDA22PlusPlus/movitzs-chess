@@ -41,6 +41,9 @@ impl Board {
                 if rank == 0 {
                     return Err("too many ranks");
                 }
+                if file != 8 {
+                    return Err("rank not finished");
+                }
                 rank -= 1;
                 file = 0;
                 continue;
@@ -51,6 +54,9 @@ impl Board {
                     return Err("too many files");
                 }
                 continue;
+            }
+            if file > 7 {
+                return Err("nah");
             }
             if c.is_alphabetic() {
                 let color = match c.is_lowercase() {
@@ -76,6 +82,10 @@ impl Board {
             }
 
             return Err("unknown character in piece placement string");
+        }
+
+        if rank != 0 {
+            return Err("not all ranks sad");
         }
 
         let mut ac_a_ca = match fen[1].chars().next().unwrap() {
