@@ -1,10 +1,9 @@
-#![feature(let_chains)]
 pub mod cmove;
 pub mod fen;
 pub mod moves;
 pub mod piece;
 
-use moves::KING_ATTACK_MASKS;
+use moves::{KING_ATTACK_MASKS, KNIGHT_ATTACK_MASKS};
 
 use crate::cmove::*;
 use crate::piece::*;
@@ -325,7 +324,7 @@ impl Board {
         match p.get_type() {
             PieceType::Pawn => self.pawn_attack(idx),
             PieceType::Rook => self.hori_vert_attack(idx),
-            PieceType::Knight => self.knight_attack(idx),
+            PieceType::Knight => KNIGHT_ATTACK_MASKS[idx as usize],
             PieceType::Bishop => self.diag_attack(idx),
             PieceType::Queen => self.hori_vert_attack(idx) ^ self.diag_attack(idx),
             PieceType::King => KING_ATTACK_MASKS[idx as usize],
