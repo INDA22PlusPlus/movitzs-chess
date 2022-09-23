@@ -68,7 +68,7 @@ pub(crate) const KING_ATTACK_MASKS: [u64; 64] = [
 ];
 
 impl Board {
-    pub(crate) fn king_moves(&self, idx: u8) -> u64 {
+    pub(crate) fn castling(&self, idx: u8) -> u64 {
         let k = self.pieces[idx as usize].unwrap();
 
         let ops_attacks = self

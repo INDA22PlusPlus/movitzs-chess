@@ -121,7 +121,7 @@ impl Board {
 
         move_mask |= match piece.get_type() {
             PieceType::Pawn => self.pawn_moves(from as u8),
-            PieceType::King => self.king_moves(from as u8),
+            PieceType::King => self.castling(from as u8),
             _ => 0,
         };
 
