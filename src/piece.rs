@@ -29,9 +29,9 @@ impl Piece {
     pub fn new(piece_type: PieceType, color: PieceColor) -> Self {
         let mut tmp: u8 = 0;
         if color == PieceColor::White {
-            tmp ^= COLOR_MASK;
+            tmp |= COLOR_MASK;
         }
-        tmp ^= piece_type as u8;
+        tmp |= piece_type as u8;
         Piece(tmp)
     }
 

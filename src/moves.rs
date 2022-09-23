@@ -209,19 +209,12 @@ impl Board {
 
     pub(crate) fn pawn_attack(&self, idx: u8) -> u64 {
         let mut result = 0;
-        let [file, _] = idx_to_square_str(idx);
 
         let color = self.pieces[idx as usize].unwrap().get_color();
 
         let idx = idx as i8;
 
         for att_mv in [1, -1_i8] {
-            if (color == PieceColor::Black && file == 'a')
-                || (color == PieceColor::White && file == 'h')
-            {
-                continue;
-            }
-
             let dir: i8 = if color == PieceColor::White { 8 } else { -8 };
 
             let att_sqr = idx + dir + att_mv;
@@ -230,7 +223,7 @@ impl Board {
             }
 
             if (att_sqr / 8) == (idx + dir) / 8 {
-                result ^= 1 << att_sqr;
+                result |= 1 << att_sqr;
             }
         }
         result
@@ -253,7 +246,7 @@ impl Board {
 
                     let n_idx = square_str_to_idx(&[file, rank]);
 
-                    result ^= 1 << n_idx;
+                    result |= 1 << n_idx;
 
                     if self.pieces[n_idx as usize].is_some() {
                         break;

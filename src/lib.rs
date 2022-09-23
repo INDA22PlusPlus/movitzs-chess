@@ -245,6 +245,19 @@ impl Board {
             self.pieces[new_rook_sqr as usize] = self.pieces[old_rook_sqr as usize];
             self.pieces[old_rook_sqr as usize] = None;
             self.pieces[mv.from as usize] = None;
+        } else if mv.to == self.en_passant_square && from_piece.get_type() == PieceType::Pawn {
+            // en passant
+
+            let x = mv.to as i8
+                + if from_piece.get_color() == PieceColor::Black {
+                    8
+                } else {
+                    -8_i8
+                };
+            self.pieces[mv.to as usize] = Some(from_piece);
+            self.pieces[x as usize] = None;
+            self.pieces[mv.from as usize] = None;
+            self.en_passant_square = u8::MAX;
         } else {
             // default
             self.pieces[mv.to as usize] = Some(new_piece);
@@ -346,7 +359,7 @@ impl Board {
             PieceType::Rook => self.hori_vert_attack(idx),
             PieceType::Knight => KNIGHT_ATTACK_MASKS[idx as usize],
             PieceType::Bishop => self.diag_attack(idx),
-            PieceType::Queen => self.hori_vert_attack(idx) ^ self.diag_attack(idx),
+            PieceType::Queen => self.hori_vert_attack(idx) | self.diag_attack(idx),
             PieceType::King => KING_ATTACK_MASKS[idx as usize],
         }
     }
@@ -678,6 +691,25 @@ mod internal_tests {
         assert_eq!(
             b.to_fen(),
             "r1bqkbnr/ppp1pppp/2n5/3pP3/8/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 3" // note d6
+        );
+    }
+
+    #[test]
+    fn en_passant_capture() {
+        let mut b =
+            Board::from_fen("r1bqkbnr/pppppp1p/2n5/6pP/8/8/PPPPPPP1/RNBQKBNR w KQkq g6 0 3")
+                .unwrap();
+
+        b.make_move(&CMove {
+            from: 39,
+            to: 46,
+            promote_to: PieceType::Pawn,
+        })
+        .unwrap();
+
+        assert_eq!(
+            b.to_fen(),
+            "r1bqkbnr/pppppp1p/2n3P1/8/8/8/PPPPPPP1/RNBQKBNR b KQkq - 0 3"
         );
     }
 }
