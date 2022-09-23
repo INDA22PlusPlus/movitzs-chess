@@ -199,10 +199,10 @@ impl Board {
     }
 
     fn apply_move(&mut self, mv: &CMove) -> Result<(), &'static str> {
-        // todo: implement en passant
-
         let from_piece = self.pieces[mv.from as usize];
         let to_piece = self.pieces[mv.to as usize];
+
+        let ac = self.get_active_color();
 
         if from_piece.is_none() {
             return Err("from square is empty");
@@ -256,8 +256,28 @@ impl Board {
             return Err("your king is in check");
         }
 
-        if self.get_active_color() == PieceColor::Black {
+        if ac == PieceColor::Black {
             self.full_moves += 1;
+        }
+
+        if (mv.to / 8).abs_diff(mv.from / 8) == 2 {
+            // en passant could be avaliable
+
+            for x in [-1_i8, 1] {
+                if self.pieces[(mv.to as i8 + x) as usize].is_none() {
+                    continue;
+                }
+                let p = self.pieces[(mv.to as i8 + x) as usize].unwrap();
+                if p.get_color() == ac || p.get_type() != PieceType::Pawn {
+                    continue;
+                }
+
+                self.en_passant_square = match from_piece.get_color() {
+                    PieceColor::White => mv.to - 8,
+                    PieceColor::Black => mv.to + 8,
+                };
+                break;
+            }
         }
 
         self.taint_castling_avaliability(mv, from_piece);
@@ -640,6 +660,24 @@ mod internal_tests {
         assert_eq!(
             b.to_fen(),
             "2kr1bnr/ppp1pppp/2nq4/3p4/3P1Bb1/2N2N1P/PPP1PPP1/R2QKB1R w KQ - 0 6"
+        );
+    }
+
+    #[test]
+    fn en_passant_square() {
+        let mut b = Board::from_fen("r1bqkbnr/pppppppp/2n5/4P3/8/8/PPPP1PPP/RNBQKBNR b KQkq - 0 2")
+            .unwrap();
+
+        b.make_move(&CMove {
+            from: 51,
+            to: 51 - 16,
+            promote_to: PieceType::Pawn,
+        })
+        .unwrap();
+
+        assert_eq!(
+            b.to_fen(),
+            "r1bqkbnr/ppp1pppp/2n5/3pP3/8/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 3" // note d6
         );
     }
 }
