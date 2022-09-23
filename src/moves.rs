@@ -68,6 +68,42 @@ pub(crate) const KING_ATTACK_MASKS: [u64; 64] = [
 ];
 
 impl Board {
+    pub(crate) fn king_moves(&self, idx: u8) -> u64 {
+        let k = self.pieces[idx as usize].unwrap();
+
+        let ops_attacks = self
+            .pieces
+            .iter()
+            .enumerate()
+            .filter(|(_, p)| p.is_some() && p.unwrap().get_color() != self.get_active_color())
+            .fold(0_u64, |acc, item| acc | 1 << item.0);
+
+        let ranges = match k.get_color() {
+            PieceColor::White => (
+                (1..=3, 1, WHITE_KING_CASTLE_MASK),
+                (5..=6, 6, WHITE_QUEEN_CASTLE_MASK),
+            ),
+            PieceColor::Black => (
+                (57..=60, 57, BLACK_KING_CASTLE_MASK),
+                (61..=62, 62, BLACK_QUEEN_CASTLE_MASK),
+            ),
+        };
+
+        let mut result = 0;
+
+        for mut range in [ranges.0, ranges.1] {
+            if self.active_color_and_castle_avaliability & range.2 != 0
+                && range
+                    .0
+                    .all(|i| self.pieces[i].is_none() && ops_attacks & 1 << i == 0)
+            {
+                result |= 1 << range.1;
+            }
+        }
+
+        result
+    }
+
     pub(crate) fn pawn_moves(&self, idx: u8) -> u64 {
         let [_, rank] = idx_to_square_str(idx);
 

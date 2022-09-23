@@ -119,9 +119,11 @@ impl Board {
             None => return,
         };
 
-        if piece.get_type() == PieceType::Pawn {
-            move_mask |= self.pawn_moves(from as u8);
-        }
+        move_mask |= match piece.get_type() {
+            PieceType::Pawn => self.pawn_moves(from as u8),
+            PieceType::King => self.king_moves(from as u8),
+            _ => 0,
+        };
 
         for to in 0..64 {
             if move_mask & 1 << to == 0 {
@@ -198,7 +200,7 @@ impl Board {
     }
 
     fn apply_move(&mut self, mv: &CMove) -> Result<(), &'static str> {
-        // todo: implement en passant, castling
+        // todo: implement en passant
 
         let from_piece = self.pieces[mv.from as usize];
         let to_piece = self.pieces[mv.to as usize];
@@ -220,8 +222,8 @@ impl Board {
 
         let mut new_piece = from_piece;
 
-        // promotion
         if from_piece.get_type() == PieceType::Pawn {
+            // promotion
             let fc = from_piece.get_color();
 
             if (fc == PieceColor::White && mv.to / 8 == 7)
@@ -234,8 +236,27 @@ impl Board {
             }
         }
 
-        self.pieces[mv.to as usize] = Some(new_piece);
-        self.pieces[mv.from as usize] = None;
+        println!(
+            "{} {} {}",
+            mv.from,
+            mv.to,
+            (mv.from % 8).abs_diff(mv.to % 8)
+        );
+        if from_piece.get_type() == PieceType::King && (mv.from % 8).abs_diff(mv.to % 8) > 1 {
+            // castling
+            let i = mv.from as i8 + (if mv.to < mv.from { -2_i8 } else { 2 });
+            let i2 = mv.from as i8 + (if mv.to < mv.from { -1_i8 } else { 1 });
+            let i3 = mv.to as i8 + (if mv.to < mv.from { -2_i8 } else { 1 });
+
+            self.pieces[i as usize] = Some(from_piece);
+            self.pieces[i2 as usize] = self.pieces[i3 as usize];
+            self.pieces[i3 as usize] = None;
+            self.pieces[mv.from as usize] = None;
+        } else {
+            // default
+            self.pieces[mv.to as usize] = Some(new_piece);
+            self.pieces[mv.from as usize] = None;
+        }
 
         if self.king_is_checked(self.get_active_color()) {
             self.pieces = old_pieces; // rollback
@@ -557,5 +578,24 @@ mod internal_tests {
         .unwrap();
 
         assert_eq!(b.state, BoardState::Checkmate);
+    }
+
+    #[test]
+    fn castling() {
+        let mut b =
+            Board::from_fen("rnbqkbnr/ppp2ppp/3p4/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 4")
+                .unwrap();
+
+        b.make_move(&CMove {
+            from: 4,
+            to: 6,
+            promote_to: PieceType::Pawn,
+        })
+        .unwrap();
+
+        assert_eq!(
+            b.to_fen(),
+            "rnbqkbnr/ppp2ppp/3p4/4p3/2B1P3/5N2/PPPP1PPP/RNBQ1RK1 b kq - 0 4"
+        );
     }
 }
