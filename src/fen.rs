@@ -84,6 +84,9 @@ impl Board {
             return Err("unknown character in piece placement string");
         }
 
+        if file != 8 {
+            return Err("last file not convered");
+        }
         if rank != 0 {
             return Err("not all ranks sad");
         }

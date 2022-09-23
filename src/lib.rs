@@ -273,10 +273,14 @@ impl Board {
             self.full_moves += 1;
         }
 
-        if (mv.to / 8).abs_diff(mv.from / 8) == 2 {
+        if from_piece.get_type() == PieceType::Pawn && (mv.to / 8).abs_diff(mv.from / 8) == 2 {
             // en passant could be avaliable
 
             for x in [-1_i8, 1] {
+                let i = (mv.to as i8).checked_add(x);
+                if i.is_none() || i.unwrap() >= 64 {
+                    continue;
+                }
                 if self.pieces[(mv.to as i8 + x) as usize].is_none() {
                     continue;
                 }
