@@ -5,15 +5,9 @@ use crate::{
     BOARD_SIZE, WHITE_KING_CASTLE_MASK, WHITE_QUEEN_CASTLE_MASK, WHITE_TO_MOVE_MASK,
 };
 
-use lazy_static::lazy_static;
-use regex::Regex;
-
 impl Board {
     pub fn from_fen(fen: &str) -> Result<Self, &'static str> {
         // Reference: https://en.wikipedia.org/wiki/Forsyth%E2%80%93Edwards_Notation
-        lazy_static! {
-            static ref ENPS_STR_RE: Regex = Regex::new(r"(?i)^-$|^[a-h][1-8]$").unwrap();
-        }
         if !fen.is_ascii() {
             return Err("fen input contains non-ascii");
         }
@@ -25,7 +19,12 @@ impl Board {
         if fen[1].len() != 1 {
             return Err("len(side to move) != 1");
         }
-        if !ENPS_STR_RE.is_match(fen[3]) {
+        let mut c = fen[3].char_indices();
+        if fen[3] != "-"
+            && !(fen[3].len() == 2
+                && c.next().unwrap().1.is_alphabetic()
+                && c.next().unwrap().1.is_numeric())
+        {
             return Err("enpassant square is invalid"); // ok this could be a simple if statement, todo remove regex
         }
 
