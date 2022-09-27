@@ -22,7 +22,7 @@ impl Board {
         let mut c = fen[3].char_indices();
         if fen[3] != "-"
             && !(fen[3].len() == 2
-                && c.next().unwrap().1.is_alphabetic()
+                && ('a'..='h').contains(&c.next().unwrap().1)
                 && c.next().unwrap().1.is_numeric())
         {
             return Err("enpassant square is invalid"); // ok this could be a simple if statement, todo remove regex
