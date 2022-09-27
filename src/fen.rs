@@ -23,7 +23,7 @@ impl Board {
         if fen[3] != "-"
             && !(fen[3].len() == 2
                 && ('a'..='h').contains(&c.next().unwrap().1)
-                && c.next().unwrap().1.is_numeric())
+                && ('1'..='8').contains(&c.next().unwrap().1))
         {
             return Err("enpassant square is invalid"); // ok this could be a simple if statement, todo remove regex
         }
