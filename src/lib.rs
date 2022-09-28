@@ -237,6 +237,10 @@ impl Board {
                 }
                 new_piece = Piece::new(mv.promote_to, fc);
             }
+
+            if to_piece.is_none() && mv.from % 8 != mv.to % 8 && mv.to != self.en_passant_square {
+                return Err("can not do diagonal move unless attack");
+            }
         }
 
         if from_piece.get_type() == PieceType::King && (mv.from % 8).abs_diff(mv.to % 8) > 1 {
