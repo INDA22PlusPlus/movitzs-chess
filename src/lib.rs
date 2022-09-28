@@ -82,7 +82,7 @@ impl Board {
         }
     }
 
-    fn get_pieces(&self, t: PieceType) -> impl Iterator<Item = (usize, Piece)> + '_ {
+    fn get_pieces_by_type(&self, t: PieceType) -> impl Iterator<Item = (usize, Piece)> + '_ {
         self.pieces
             .iter()
             .enumerate()
@@ -90,8 +90,12 @@ impl Board {
             .map(|(i, p)| (i, p.unwrap()))
     }
 
+    pub fn get_pices(&self) -> [Option<Piece>; 64] {
+        self.pieces
+    }
+
     pub fn valid_kings(&self) -> bool {
-        let kings: Vec<(usize, Piece)> = self.get_pieces(PieceType::King).collect();
+        let kings: Vec<(usize, Piece)> = self.get_pieces_by_type(PieceType::King).collect();
 
         if kings.len() != 2 {
             return false;
@@ -334,7 +338,7 @@ impl Board {
 
     fn king_is_checked(&self, ac: PieceColor) -> bool {
         let king_square = self
-            .get_pieces(PieceType::King)
+            .get_pieces_by_type(PieceType::King)
             .find(|k| k.1.get_color() == ac)
             .expect("where knug")
             .0;
